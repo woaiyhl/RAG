@@ -1,0 +1,22 @@
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+backend/data/chroma_db/
+backend/data/*.pdf
+backend/data/*.txt
+!backend/data/test_doc.txt
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Store
+frontend/.env
+frontend/.env.local
+
+# System
+.DS_Store
+.vscode/
+.idea/
+*.log

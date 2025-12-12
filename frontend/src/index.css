@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased text-gray-900 bg-gray-50;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* Markdown Styles */
+.prose pre {
+  @apply bg-gray-900 text-gray-100 rounded-lg p-4 my-4 overflow-x-auto;
+}
+
+.prose code {
+  @apply text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded text-sm font-mono font-medium;
+}
+
+.prose pre code {
+  @apply text-gray-100 bg-transparent p-0 text-sm;
+}
+
+.prose h1,
+.prose h2,
+.prose h3 {
+  @apply text-gray-800 font-semibold mt-6 mb-3;
+}
+
+.prose p {
+  @apply leading-relaxed mb-3;
+}
+
+.prose ul {
+  @apply list-disc list-outside ml-5 mb-3 space-y-1;
+}
+
+.prose ol {
+  @apply list-decimal list-outside ml-5 mb-3 space-y-1;
+}
+
+.prose strong {
+  @apply font-semibold text-gray-900;
+}
+
+.prose a {
+  @apply text-primary-600 hover:text-primary-700 underline;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-primary-200 pl-4 italic text-gray-600 my-4;
+}
