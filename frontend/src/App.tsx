@@ -1,22 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
-import { uploadDocument, chat } from "./services/api";
-import ReactMarkdown from "react-markdown";
-import {
-  Send,
-  Upload,
-  FileText,
-  Loader2,
-  Bot,
-  User,
-  CheckCircle2,
-  AlertCircle,
-  Sparkles,
-  BookOpen,
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useRef, useEffect } from 'react';
+import { uploadDocument, chat } from './services/api';
+import ReactMarkdown from 'react-markdown';
+import { Send, Upload, FileText, Loader2, Bot, User, CheckCircle2, AlertCircle, Sparkles, BookOpen } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   sources?: string[];
   id: string;
@@ -24,14 +13,14 @@ interface Message {
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -40,35 +29,29 @@ function App() {
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.[0]) return;
-
+    
     setIsUploading(true);
-    setUploadStatus("idle");
+    setUploadStatus('idle');
     try {
       const file = e.target.files[0];
       await uploadDocument(file);
-      setUploadStatus("success");
-      setTimeout(() => setUploadStatus("idle"), 3000);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: `**文档解析成功** \n\n已成功收录文档 "${file.name}"。我现在已经学习了其中的内容，您可以随时向我提问。`,
-        },
-      ]);
+      setUploadStatus('success');
+      setTimeout(() => setUploadStatus('idle'), 3000);
+      
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `**文档解析成功** \n\n已成功收录文档 "${file.name}"。我现在已经学习了其中的内容，您可以随时向我提问。`
+      }]);
     } catch (error) {
       console.error(error);
-      setUploadStatus("error");
-      setTimeout(() => setUploadStatus("idle"), 3000);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "**上传失败** \n\n抱歉，文档处理过程中出现了问题，请稍后重试。",
-        },
-      ]);
+      setUploadStatus('error');
+      setTimeout(() => setUploadStatus('idle'), 3000);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: '**上传失败** \n\n抱歉，文档处理过程中出现了问题，请稍后重试。'
+      }]);
     } finally {
       setIsUploading(false);
     }
@@ -78,32 +61,26 @@ function App() {
     if (!input.trim() || isLoading) return;
 
     const userMessage = input;
-    setInput("");
+    setInput('');
     const tempId = Date.now().toString();
-    setMessages((prev) => [...prev, { id: tempId, role: "user", content: userMessage }]);
+    setMessages(prev => [...prev, { id: tempId, role: 'user', content: userMessage }]);
     setIsLoading(true);
 
     try {
       const response = await chat(userMessage);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: response.answer,
-          sources: response.sources,
-        },
-      ]);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: response.answer,
+        sources: response.sources
+      }]);
     } catch (error) {
       console.error(error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "❌ 由于网络问题或服务异常，暂时无法回答，请稍后再试。",
-        },
-      ]);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '❌ 由于网络问题或服务异常，暂时无法回答，请稍后再试。'
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -124,61 +101,46 @@ function App() {
             </div>
           </div>
         </div>
-
+        
         <div className="p-6 space-y-6">
           <div className="space-y-2">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">
-              知识库管理
-            </h3>
-            <label
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">知识库管理</h3>
+            <label 
               className={`
                 group flex flex-col items-center justify-center w-full h-32 
                 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200
-                ${
-                  uploadStatus === "error"
-                    ? "border-red-500/50 bg-red-500/10"
-                    : uploadStatus === "success"
-                    ? "border-green-500/50 bg-green-500/10"
-                    : "border-gray-700 hover:border-primary-500 hover:bg-gray-800/50"
+                ${uploadStatus === 'error' 
+                  ? 'border-red-500/50 bg-red-500/10' 
+                  : uploadStatus === 'success'
+                    ? 'border-green-500/50 bg-green-500/10'
+                    : 'border-gray-700 hover:border-primary-500 hover:bg-gray-800/50'
                 }
               `}
             >
               <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
                 {isUploading ? (
                   <Loader2 className="w-8 h-8 text-primary-500 animate-spin mb-2" />
-                ) : uploadStatus === "success" ? (
+                ) : uploadStatus === 'success' ? (
                   <CheckCircle2 className="w-8 h-8 text-green-500 mb-2" />
-                ) : uploadStatus === "error" ? (
+                ) : uploadStatus === 'error' ? (
                   <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
                 ) : (
                   <Upload className="w-8 h-8 text-gray-500 group-hover:text-primary-400 transition-colors mb-2" />
                 )}
-
+                
                 <p className="text-sm font-medium text-gray-400 group-hover:text-gray-300">
-                  {isUploading
-                    ? "正在解析文档..."
-                    : uploadStatus === "success"
-                    ? "上传成功"
-                    : uploadStatus === "error"
-                    ? "上传失败"
-                    : "点击或拖拽上传文档"}
+                  {isUploading ? '正在解析文档...' : 
+                   uploadStatus === 'success' ? '上传成功' :
+                   uploadStatus === 'error' ? '上传失败' : '点击或拖拽上传文档'}
                 </p>
                 <p className="text-xs text-gray-600 mt-1">支持 PDF, TXT, MD</p>
               </div>
-              <input
-                type="file"
-                className="hidden"
-                onChange={handleUpload}
-                accept=".pdf,.txt,.md"
-                disabled={isUploading}
-              />
+              <input type="file" className="hidden" onChange={handleUpload} accept=".pdf,.txt,.md" disabled={isUploading} />
             </label>
           </div>
-
+          
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">
-              核心能力
-            </h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">核心能力</h3>
             <div className="space-y-3">
               <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-800">
                 <div className="bg-blue-500/10 p-1.5 rounded text-blue-400 mt-0.5">
@@ -227,7 +189,9 @@ function App() {
             <Sparkles className="w-4 h-4 text-primary-500" />
             AI 问答助手
           </h2>
-          <div className="text-sm text-gray-400">Based on RAG Technology</div>
+          <div className="text-sm text-gray-400">
+            Based on RAG Technology
+          </div>
         </div>
 
         {/* Messages */}
@@ -245,48 +209,39 @@ function App() {
               </div>
             </div>
           )}
-
+          
           <AnimatePresence>
             {messages.map((msg) => (
-              <motion.div
+              <motion.div 
                 key={msg.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className={`flex gap-5 ${
-                  msg.role === "user" ? "justify-end" : "justify-start max-w-4xl"
-                }`}
+                className={`flex gap-5 ${msg.role === 'user' ? 'justify-end' : 'justify-start max-w-4xl'}`}
               >
-                {msg.role === "assistant" && (
+                {msg.role === 'assistant' && (
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary-500/20 text-white mt-1">
                     <Bot className="w-6 h-6" />
                   </div>
                 )}
-
+                
                 <div className={`flex flex-col space-y-2 max-w-[85%]`}>
-                  <div
-                    className={`
+                  <div className={`
                     rounded-2xl px-6 py-4 shadow-sm
-                    ${
-                      msg.role === "user"
-                        ? "bg-gray-900 text-white rounded-br-sm"
-                        : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-md"
+                    ${msg.role === 'user' 
+                      ? 'bg-gray-900 text-white rounded-br-sm' 
+                      : 'bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-md'
                     }
-                  `}
-                  >
-                    <ReactMarkdown
-                      className={`prose prose-sm max-w-none ${
-                        msg.role === "user" ? "prose-invert" : ""
-                      }`}
-                    >
+                  `}>
+                    <ReactMarkdown className={`prose prose-sm max-w-none ${msg.role === 'user' ? 'prose-invert' : ''}`}>
                       {msg.content}
                     </ReactMarkdown>
                   </div>
-
+                  
                   {msg.sources && msg.sources.length > 0 && (
-                    <motion.div
+                    <motion.div 
                       initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
+                      animate={{ opacity: 1, height: 'auto' }}
                       className="ml-2"
                     >
                       <div className="bg-gray-50 rounded-xl p-4 border border-gray-200/60 text-sm space-y-3">
@@ -295,10 +250,7 @@ function App() {
                         </p>
                         <div className="grid gap-2">
                           {msg.sources.map((source, i) => (
-                            <div
-                              key={i}
-                              className="bg-white p-3 rounded-lg border border-gray-200 text-gray-600 text-xs leading-relaxed shadow-sm"
-                            >
+                            <div key={i} className="bg-white p-3 rounded-lg border border-gray-200 text-gray-600 text-xs leading-relaxed shadow-sm">
                               {source}
                             </div>
                           ))}
@@ -308,7 +260,7 @@ function App() {
                   )}
                 </div>
 
-                {msg.role === "user" && (
+                {msg.role === 'user' && (
                   <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-1 border border-white shadow-sm">
                     <User className="w-6 h-6 text-gray-500" />
                   </div>
@@ -316,9 +268,9 @@ function App() {
               </motion.div>
             ))}
           </AnimatePresence>
-
+          
           {isLoading && (
-            <motion.div
+            <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="flex gap-5 max-w-4xl"
@@ -327,18 +279,9 @@ function App() {
                 <Bot className="w-6 h-6" />
               </div>
               <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-6 py-4 shadow-md flex items-center gap-2">
-                <div
-                  className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"
-                  style={{ animationDelay: "0ms" }}
-                />
-                <div
-                  className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <div
-                  className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"
-                  style={{ animationDelay: "300ms" }}
-                />
+                <div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </motion.div>
           )}
@@ -352,7 +295,7 @@ function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
               placeholder="输入你的问题，例如：RAG 的核心优势是什么？"
               className="w-full pl-6 pr-32 py-4 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all shadow-sm text-gray-700 placeholder-gray-400"
               disabled={isLoading}
