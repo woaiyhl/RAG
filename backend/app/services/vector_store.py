@@ -7,14 +7,17 @@ from langchain_core.documents import Document
 
 class VectorStoreService:
     def __init__(self):
-        if settings.USE_MOCK_RAG:
+        if settings.USE_MOCK_RAG or not settings.is_api_key_valid():
+            if not settings.USE_MOCK_RAG:
+                print("Warning: Invalid or missing OpenAI API Key. Fallback to Mock Embeddings.")
             # Mock embeddings with same dimension as text-embedding-3-small (1536)
             self.embeddings = FakeEmbeddings(size=1536)
         else:
             self.embeddings = OpenAIEmbeddings(
                 model=settings.EMBEDDING_MODEL_NAME,
                 openai_api_key=settings.OPENAI_API_KEY,
-                openai_api_base=settings.OPENAI_API_BASE
+                openai_api_base=settings.OPENAI_API_BASE,
+                timeout=60
             )
         self.vector_db = Chroma(
             persist_directory=settings.CHROMA_PERSIST_DIRECTORY,

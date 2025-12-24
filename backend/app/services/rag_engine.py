@@ -9,14 +9,15 @@ import asyncio
 class RAGEngine:
     def __init__(self):
         self.vector_store_service = VectorStoreService()
-        if settings.USE_MOCK_RAG:
+        if settings.USE_MOCK_RAG or not settings.is_api_key_valid():
             self.llm = FakeListLLM(responses=["这是一个模拟的回答。"])
         else:
             self.llm = ChatOpenAI(
                 model_name=settings.LLM_MODEL_NAME,
                 temperature=0,
                 openai_api_key=settings.OPENAI_API_KEY,
-                openai_api_base=settings.OPENAI_API_BASE
+                openai_api_base=settings.OPENAI_API_BASE,
+                timeout=60
             )
         
     def get_answer(self, query: str) -> dict:

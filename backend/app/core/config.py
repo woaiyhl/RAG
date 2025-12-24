@@ -17,4 +17,18 @@ class Settings:
     # Mock Configuration
     USE_MOCK_RAG = os.getenv("USE_MOCK_RAG", "false").lower() == "true"
     
+    def is_api_key_valid(self) -> bool:
+        """Check if the API Key is valid (non-empty and ASCII only)."""
+        if not self.OPENAI_API_KEY:
+            return False
+        # Check if it contains the default placeholder text
+        if "在此处填入" in self.OPENAI_API_KEY:
+            return False
+        # Check for non-ASCII characters
+        try:
+            self.OPENAI_API_KEY.encode('ascii')
+            return True
+        except UnicodeEncodeError:
+            return False
+    
 settings = Settings()
