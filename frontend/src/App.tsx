@@ -14,6 +14,7 @@ import {
   Sparkles,
   BookOpen,
   Settings,
+  Square,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ConfigProvider } from "antd";
@@ -34,6 +35,7 @@ function App() {
   const [refreshDocsTrigger, setRefreshDocsTrigger] = useState(0);
   const [isDocManagerOpen, setIsDocManagerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -80,6 +82,14 @@ function App() {
     }
   };
 
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -88,6 +98,10 @@ function App() {
     const tempId = Date.now().toString();
     setMessages((prev) => [...prev, { id: tempId, role: "user", content: userMessage }]);
     setIsLoading(true);
+
+    // Create a new AbortController
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     // Create a placeholder for the assistant's message
     const assistantMsgId = (Date.now() + 1).toString();
@@ -118,6 +132,10 @@ function App() {
         );
       },
       (error) => {
+        if (error.name === "AbortError") {
+          console.log("Request aborted");
+          return;
+        }
         console.error(error);
         setMessages((prev) =>
           prev.map((msg) => {
@@ -130,7 +148,9 @@ function App() {
       },
       () => {
         setIsLoading(false);
+        abortControllerRef.current = null;
       },
+      controller.signal,
     );
   };
 
@@ -297,13 +317,30 @@ function App() {
                     }
                   `}
                     >
-                      <ReactMarkdown
-                        className={`prose prose-sm max-w-none ${
-                          msg.role === "user" ? "prose-invert" : ""
-                        }`}
-                      >
-                        {msg.content}
-                      </ReactMarkdown>
+                      {msg.role === "assistant" && !msg.content ? (
+                        <div className="flex items-center gap-2 h-5">
+                          <div
+                            className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
+                            style={{ animationDelay: "0ms" }}
+                          />
+                          <div
+                            className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
+                            style={{ animationDelay: "150ms" }}
+                          />
+                          <div
+                            className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
+                            style={{ animationDelay: "300ms" }}
+                          />
+                        </div>
+                      ) : (
+                        <ReactMarkdown
+                          className={`prose prose-sm max-w-none ${
+                            msg.role === "user" ? "prose-invert" : ""
+                          }`}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      )}
                     </div>
 
                     {msg.sources && msg.sources.length > 0 && (
@@ -340,31 +377,6 @@ function App() {
               ))}
             </AnimatePresence>
 
-            {isLoading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex gap-5 max-w-4xl"
-              >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary-500/20 text-white mt-1">
-                  <Bot className="w-6 h-6" />
-                </div>
-                <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-sm px-6 py-4 shadow-md flex items-center gap-2">
-                  <div
-                    className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "0ms" }}
-                  />
-                  <div
-                    className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "150ms" }}
-                  />
-                  <div
-                    className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "300ms" }}
-                  />
-                </div>
-              </motion.div>
-            )}
             <div ref={messagesEndRef} className="h-4" />
           </div>
 
@@ -381,20 +393,24 @@ function App() {
                 disabled={isLoading}
               />
               <div className="absolute right-2 top-2 bottom-2">
-                <button
-                  onClick={handleSend}
-                  disabled={isLoading || !input.trim()}
-                  className="h-full px-6 bg-gray-900 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <span className="text-sm font-medium">发送</span>
-                      <Send className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
+                {isLoading ? (
+                  <button
+                    onClick={handleStop}
+                    className="h-full px-6 bg-red-500 text-white rounded-full hover:bg-red-600 flex items-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
+                  >
+                    <span className="text-sm font-medium">停止</span>
+                    <Square className="w-4 h-4 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                    className="h-full px-6 bg-gray-900 text-white rounded-full hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md hover:shadow-lg active:scale-95"
+                  >
+                    <span className="text-sm font-medium">发送</span>
+                    <Send className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
             <p className="text-center text-xs text-gray-400 mt-3">

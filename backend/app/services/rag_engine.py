@@ -44,7 +44,7 @@ class RAGEngine:
 
         retriever = self.vector_store_service.vector_db.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 4}
+            search_kwargs={"k": 60}
         )
         
         qa_chain = RetrievalQA.from_chain_type(
@@ -66,7 +66,7 @@ class RAGEngine:
 
         retriever = self.vector_store_service.vector_db.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 4}
+            search_kwargs={"k": 60}
         )
         
         qa_chain = RetrievalQA.from_chain_type(
@@ -100,7 +100,7 @@ class RAGEngine:
         # Real RAG Streaming
         retriever = self.vector_store_service.vector_db.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 4}
+            search_kwargs={"k": 60}
         )
         
         docs = await retriever.aget_relevant_documents(query)

@@ -46,6 +46,7 @@ export const chatStream = async (
   onChunk: (data: { answer?: string; sources?: string[] }) => void,
   onError: (error: any) => void,
   onFinish: () => void,
+  signal?: AbortSignal,
 ) => {
   try {
     const response = await fetch("/api/v1/rag/chat/stream", {
@@ -54,6 +55,7 @@ export const chatStream = async (
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query }),
+      signal,
     });
 
     if (!response.ok) {
