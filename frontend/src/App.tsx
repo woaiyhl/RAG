@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { uploadDocument, chat } from './services/api';
+import { uploadDocument, chatStream } from './services/api';
 import ReactMarkdown from 'react-markdown';
 import { Send, Upload, FileText, Loader2, Bot, User, CheckCircle2, AlertCircle, Sparkles, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -66,24 +66,42 @@ function App() {
     setMessages(prev => [...prev, { id: tempId, role: 'user', content: userMessage }]);
     setIsLoading(true);
 
-    try {
-      const response = await chat(userMessage);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.answer,
-        sources: response.sources
-      }]);
-    } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '❌ 由于网络问题或服务异常，暂时无法回答，请稍后再试。'
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
+    // Create a placeholder for the assistant's message
+    const assistantMsgId = (Date.now() + 1).toString();
+    setMessages(prev => [...prev, {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: ''
+    }]);
+
+    await chatStream(
+      userMessage,
+      (data) => {
+        setMessages(prev => prev.map(msg => {
+          if (msg.id === assistantMsgId) {
+            if (data.answer) {
+              return { ...msg, content: msg.content + data.answer };
+            }
+            if (data.sources) {
+              return { ...msg, sources: data.sources };
+            }
+          }
+          return msg;
+        }));
+      },
+      (error) => {
+        console.error(error);
+        setMessages(prev => prev.map(msg => {
+          if (msg.id === assistantMsgId) {
+            return { ...msg, content: msg.content + '\n\n❌ 发生错误，请重试。' };
+          }
+          return msg;
+        }));
+      },
+      () => {
+        setIsLoading(false);
+      }
+    );
   };
 
   return (

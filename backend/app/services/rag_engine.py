@@ -9,8 +9,10 @@ import asyncio
 class RAGEngine:
     def __init__(self):
         self.vector_store_service = VectorStoreService()
-        if settings.USE_MOCK_RAG or not settings.is_api_key_valid():
+        if settings.USE_MOCK_RAG:
             self.llm = FakeListLLM(responses=["这是一个模拟的回答。"])
+        elif not settings.is_api_key_valid():
+            self.llm = FakeListLLM(responses=["【配置错误】\n检测到 API Key 未配置或无效。\n\n请打开 backend/.env 文件，将 OPENAI_API_KEY 替换为您真实的 API Key。\n如果您还没有 Key，请访问 https://cloud.siliconflow.cn/ 免费申请。"])
         else:
             self.llm = ChatOpenAI(
                 model_name=settings.LLM_MODEL_NAME,
@@ -76,3 +78,49 @@ class RAGEngine:
         
         result = await qa_chain.ainvoke({"query": query})
         return result
+
+    async def astream_answer_generator(self, query: str):
+        """Generator for streaming answer."""
+        if settings.USE_MOCK_RAG:
+            # Simulate streaming in Mock mode
+            result = self.get_answer(query)
+            full_answer = result["result"]
+            sources = result["source_documents"]
+            
+            # Stream characters
+            for i in range(0, len(full_answer), 2):  # Stream 2 chars at a time
+                chunk = full_answer[i:i+2]
+                yield {"answer": chunk}
+                await asyncio.sleep(0.05)
+                
+            # Send sources at the end
+            yield {"sources": [doc.page_content for doc in sources]}
+            return
+
+        # Real RAG Streaming
+        retriever = self.vector_store_service.vector_db.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 4}
+        )
+        
+        docs = await retriever.aget_relevant_documents(query)
+        context = "\n\n".join([doc.page_content for doc in docs])
+        
+        # Manually construct prompt to control streaming
+        from langchain_core.messages import SystemMessage, HumanMessage
+        
+        system_prompt = "你是一个专业的知识库助手。请根据以下提供的参考文档内容回答用户的问题。如果文档中没有相关信息，请诚实地说明无法回答，不要编造信息。回答要条理清晰，使用 Markdown 格式。"
+        user_prompt = f"参考文档：\n{context}\n\n用户问题：{query}"
+        
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+        
+        # Stream from LLM
+        async for chunk in self.llm.astream(messages):
+            if chunk.content:
+                yield {"answer": chunk.content}
+                
+        # Send sources at the end
+        yield {"sources": [doc.page_content for doc in docs]}

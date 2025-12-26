@@ -69,6 +69,9 @@ async def upload_document(file: UploadFile = File(...)):
              os.remove(temp_path)
         raise HTTPException(status_code=500, detail=str(e))
 
+from fastapi.responses import StreamingResponse
+import json
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """Chat with the RAG knowledge base."""
@@ -84,4 +87,21 @@ async def chat(request: ChatRequest):
         )
         
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """Chat with the RAG knowledge base (Streaming)."""
+    try:
+        rag_engine = RAGEngine()
+        
+        async def generate():
+            async for chunk in rag_engine.astream_answer_generator(request.query):
+                # Ensure we send valid JSON in SSE format
+                yield f"data: {json.dumps(chunk)}\n\n"
+        
+        return StreamingResponse(generate(), media_type="text/event-stream")
+        
+    except Exception as e:
+        logger.error(f"Error in chat stream: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

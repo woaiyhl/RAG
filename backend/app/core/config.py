@@ -9,10 +9,10 @@ class Settings:
     CHROMA_PERSIST_DIRECTORY = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data/chroma_db")
     
     # Embedding Model Configuration
-    EMBEDDING_MODEL_NAME = "text-embedding-3-small"
+    EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-3-small")
     
     # LLM Configuration
-    LLM_MODEL_NAME = "gpt-3.5-turbo"
+    LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "gpt-3.5-turbo")
     
     # Mock Configuration
     USE_MOCK_RAG = os.getenv("USE_MOCK_RAG", "false").lower() == "true"
