@@ -8,6 +8,7 @@ import {
   FullscreenOutlined,
   FullscreenExitOutlined,
 } from "@ant-design/icons";
+import { Trash2 } from "lucide-react";
 import type { ColumnsType } from "antd/es/table";
 import { getDocuments, deleteDocument, Document } from "../services/api";
 
@@ -158,13 +159,15 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             okText="是"
             cancelText="否"
             okButtonProps={{ danger: true }}
+            onCancel={(e) => e?.stopPropagation()}
           >
-            <Button
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-              loading={deleteLoading === record.id}
-            />
+            <button
+              onClick={(e) => e.stopPropagation()}
+              className="p-1 hover:text-red-400 transition-opacity"
+              disabled={deleteLoading === record.id}
+            >
+              <Trash2 size={16} />
+            </button>
           </Popconfirm>
         </Space>
       ),
