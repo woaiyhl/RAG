@@ -23,11 +23,29 @@ export const chat = async (query: string) => {
   return response.data;
 };
 
+export interface Document {
+  id: number;
+  filename: string;
+  upload_time: string;
+  status: string;
+  file_size: number;
+}
+
+export const getDocuments = async (): Promise<Document[]> => {
+  const response = await api.get("/documents/");
+  return response.data;
+};
+
+export const deleteDocument = async (id: number) => {
+  const response = await api.delete(`/documents/${id}`);
+  return response.data;
+};
+
 export const chatStream = async (
   query: string,
   onChunk: (data: { answer?: string; sources?: string[] }) => void,
   onError: (error: any) => void,
-  onFinish: () => void
+  onFinish: () => void,
 ) => {
   try {
     const response = await fetch("/api/v1/rag/chat/stream", {

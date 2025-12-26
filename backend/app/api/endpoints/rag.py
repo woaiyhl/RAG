@@ -1,5 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Depends
 from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.orm import Session
 from typing import List
 import shutil
 import os
@@ -8,6 +9,8 @@ import logging
 from app.services.document_service import DocumentService
 from app.services.vector_store import VectorStoreService
 from app.services.rag_engine import RAGEngine
+from app.core.database import get_db
+from app.models.document import DocumentModel
 from pydantic import BaseModel
 
 # Configure logging
@@ -24,10 +27,23 @@ class ChatResponse(BaseModel):
     sources: List[str]
 
 @router.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     """Upload a document and process it."""
     try:
         logger.info(f"Starting upload for file: {file.filename}")
+        
+        # 0. Create Database Record
+        db_doc = DocumentModel(
+            filename=file.filename,
+            status="processing",
+            file_size=0 # We'll update this later
+        )
+        db.add(db_doc)
+        db.commit()
+        db.refresh(db_doc)
         
         # 1. Save file temporarily
         file_ext = os.path.splitext(file.filename)[1]
@@ -39,6 +55,10 @@ async def upload_document(file: UploadFile = File(...)):
         
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+            
+        file_size = os.path.getsize(temp_path)
+        db_doc.file_size = file_size
+        db.commit()
         
         logger.info(f"File saved locally at {temp_path}")
             
@@ -49,6 +69,11 @@ async def upload_document(file: UploadFile = File(...)):
         chunks = await run_in_threadpool(doc_service.load_and_split, temp_path)
         logger.info(f"Document split into {len(chunks)} chunks")
         
+        # Add file_id to metadata for all chunks
+        for chunk in chunks:
+            chunk.metadata["file_id"] = str(db_doc.id)
+            chunk.metadata["filename"] = file.filename
+        
         # 3. Store vectors
         vector_service = VectorStoreService()
         logger.info("Starting vector storage (embedding generation)...")
@@ -56,14 +81,23 @@ async def upload_document(file: UploadFile = File(...)):
         await run_in_threadpool(vector_service.add_documents, chunks)
         logger.info("Vector storage completed")
         
+        # Update DB status
+        db_doc.status = "processed"
+        db.commit()
+        
         # Cleanup
         os.remove(temp_path)
         logger.info("Temporary file cleaned up")
         
-        return {"message": f"Successfully processed {file.filename}", "chunks": len(chunks)}
+        return {"message": f"Successfully processed {file.filename}", "chunks": len(chunks), "doc_id": db_doc.id}
         
     except Exception as e:
         logger.error(f"Error processing file: {str(e)}", exc_info=True)
+        # Update DB status to error
+        if 'db_doc' in locals():
+            db_doc.status = "error"
+            db.commit()
+            
         # Clean up temp file if it exists and error occurred
         if 'temp_path' in locals() and os.path.exists(temp_path):
              os.remove(temp_path)
