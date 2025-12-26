@@ -1,6 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from app.core.database import Base, engine
+# Import models to register them with Base
+from app.models import conversation, document 
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 from app.api.api import api_router
 

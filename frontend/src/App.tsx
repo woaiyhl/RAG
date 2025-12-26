@@ -1,6 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
-import { uploadDocument, chatStream } from "./services/api";
+import {
+  uploadDocument,
+  chatStream,
+  createConversation,
+  getConversation,
+  chatStreamWithConversation,
+} from "./services/api";
 import { DocumentManager } from "./components/DocumentManager";
+import { Sidebar } from "./components/Sidebar";
 import ReactMarkdown from "react-markdown";
 import {
   Send,
@@ -37,8 +44,49 @@ function App() {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
   const [refreshDocsTrigger, setRefreshDocsTrigger] = useState(0);
   const [isDocManagerOpen, setIsDocManagerOpen] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const skipFetchRef = useRef(false);
+
+  // Load conversation history
+  useEffect(() => {
+    if (currentConversationId) {
+      if (skipFetchRef.current) {
+        skipFetchRef.current = false;
+        return;
+      }
+      setIsLoading(true);
+      getConversation(currentConversationId)
+        .then((data) => {
+          const formattedMessages = data.messages.map((msg) => ({
+            id: msg.id.toString(),
+            role: msg.role,
+            content: msg.content,
+            sources: msg.sources ? JSON.parse(msg.sources) : undefined,
+          }));
+          setMessages(formattedMessages);
+        })
+        .catch((err) => {
+          console.error(err);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      setMessages([]);
+    }
+  }, [currentConversationId]);
+
+  const handleNewConversation = () => {
+    setCurrentConversationId(null);
+    setMessages([]);
+    setInput("");
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
 
   // 语音输入相关逻辑
   const [initialInput, setInitialInput] = useState("");
@@ -125,59 +173,82 @@ function App() {
     setMessages((prev) => [...prev, { id: tempId, role: "user", content: userMessage }]);
     setIsLoading(true);
 
-    // Create a new AbortController
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
+    let conversationId = currentConversationId;
 
-    // Create a placeholder for the assistant's message
-    const assistantMsgId = (Date.now() + 1).toString();
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: assistantMsgId,
-        role: "assistant",
-        content: "",
-      },
-    ]);
+    try {
+      if (!conversationId) {
+        const newConv = await createConversation();
+        conversationId = newConv.id;
+        skipFetchRef.current = true;
+        setCurrentConversationId(conversationId);
+        setRefreshSidebarTrigger((prev) => prev + 1);
+      }
 
-    await chatStream(
-      userMessage,
-      (data) => {
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.id === assistantMsgId) {
-              if (data.answer) {
-                return { ...msg, content: msg.content + data.answer };
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const assistantMsgId = (Date.now() + 1).toString();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMsgId,
+          role: "assistant",
+          content: "",
+        },
+      ]);
+
+      await chatStreamWithConversation(
+        conversationId,
+        userMessage,
+        (data) => {
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id === assistantMsgId) {
+                if (data.answer) {
+                  return { ...msg, content: msg.content + data.answer };
+                }
+                if (data.sources) {
+                  return { ...msg, sources: data.sources };
+                }
               }
-              if (data.sources) {
-                return { ...msg, sources: data.sources };
+              return msg;
+            }),
+          );
+        },
+        (error) => {
+          if (error.name === "AbortError") {
+            console.log("Request aborted");
+            return;
+          }
+          console.error(error);
+          setMessages((prev) =>
+            prev.map((msg) => {
+              if (msg.id === assistantMsgId) {
+                return { ...msg, content: msg.content + "\n\n❌ 发生错误，请重试。" };
               }
-            }
-            return msg;
-          }),
-        );
-      },
-      (error) => {
-        if (error.name === "AbortError") {
-          console.log("Request aborted");
-          return;
-        }
-        console.error(error);
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.id === assistantMsgId) {
-              return { ...msg, content: msg.content + "\n\n❌ 发生错误，请重试。" };
-            }
-            return msg;
-          }),
-        );
-      },
-      () => {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-      },
-      controller.signal,
-    );
+              return msg;
+            }),
+          );
+        },
+        () => {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          setRefreshSidebarTrigger((prev) => prev + 1);
+        },
+        controller.signal,
+      );
+    } catch (error) {
+      console.error(error);
+      setIsLoading(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: "❌ 抱歉，遇到了一些问题，请稍后重试。",
+        },
+      ]);
+    }
   };
 
   return (
@@ -203,14 +274,21 @@ function App() {
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
+          <Sidebar
+            currentConversationId={currentConversationId}
+            onSelectConversation={setCurrentConversationId}
+            onNewConversation={handleNewConversation}
+            refreshTrigger={refreshSidebarTrigger}
+          />
+
+          <div className="p-4 space-y-4 border-t border-gray-800 bg-gray-900/50 flex-shrink-0">
             <div className="space-y-2">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">
                 知识库管理
               </h3>
               <label
                 className={`
-                  group flex flex-col items-center justify-center w-full h-32 
+                  group flex flex-col items-center justify-center w-full h-20 
                   border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200
                   ${
                     uploadStatus === "error"
@@ -221,27 +299,26 @@ function App() {
                   }
                 `}
               >
-                <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
+                <div className="flex items-center gap-2">
                   {isUploading ? (
-                    <Loader2 className="w-8 h-8 text-primary-500 animate-spin mb-2" />
+                    <Loader2 className="w-5 h-5 text-primary-500 animate-spin" />
                   ) : uploadStatus === "success" ? (
-                    <CheckCircle2 className="w-8 h-8 text-green-500 mb-2" />
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
                   ) : uploadStatus === "error" ? (
-                    <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+                    <AlertCircle className="w-5 h-5 text-red-500" />
                   ) : (
-                    <Upload className="w-8 h-8 text-gray-500 group-hover:text-primary-400 transition-colors mb-2" />
+                    <Upload className="w-5 h-5 text-gray-500 group-hover:text-primary-400 transition-colors" />
                   )}
 
-                  <p className="text-sm font-medium text-gray-400 group-hover:text-gray-300">
+                  <span className="text-xs text-gray-400 group-hover:text-gray-300 font-medium">
                     {isUploading
-                      ? "正在解析文档..."
+                      ? "正在解析..."
                       : uploadStatus === "success"
                       ? "上传成功"
                       : uploadStatus === "error"
                       ? "上传失败"
-                      : "点击或拖拽上传文档"}
-                  </p>
-                  <p className="text-xs text-gray-600 mt-1">支持 PDF, TXT, MD</p>
+                      : "上传文档 (PDF/TXT)"}
+                  </span>
                 </div>
                 <input
                   type="file"
@@ -253,30 +330,18 @@ function App() {
               </label>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">
-                已收录文档
-              </h3>
-              <button
-                onClick={() => setIsDocManagerOpen(true)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl hover:bg-gray-800 hover:border-primary-500/50 transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gray-800 rounded-lg group-hover:bg-primary-900/30 transition-colors">
-                    <Settings className="w-4 h-4 text-gray-400 group-hover:text-primary-400" />
-                  </div>
-                  <span className="text-sm text-gray-300 font-medium group-hover:text-white">
-                    管理文档列表
-                  </span>
-                </div>
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
-              </button>
-            </div>
-          </div>
+            <button
+              onClick={() => setIsDocManagerOpen(true)}
+              className="w-full flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg hover:bg-gray-800 hover:border-primary-500/50 transition-all group"
+            >
+              <Settings className="w-4 h-4 text-gray-400 group-hover:text-primary-400" />
+              <span className="text-xs text-gray-300 font-medium group-hover:text-white">
+                管理文档列表
+              </span>
+            </button>
 
-          <div className="mt-auto p-6 border-t border-gray-800">
-            <div className="flex items-center gap-3 text-gray-400 text-sm">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+            <div className="flex items-center gap-2 text-gray-500 text-xs pt-2 border-t border-gray-800">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
               系统运行正常
             </div>
           </div>
