@@ -15,9 +15,12 @@ import {
   BookOpen,
   Settings,
   Square,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, Tooltip } from "antd";
+import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 
 interface Message {
   role: "user" | "assistant";
@@ -36,6 +39,29 @@ function App() {
   const [isDocManagerOpen, setIsDocManagerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // 语音输入相关逻辑
+  const [initialInput, setInitialInput] = useState("");
+  const {
+    isListening,
+    isSupported,
+    startListening,
+    stopListening,
+    error: speechError,
+  } = useSpeechRecognition({
+    onResult: (transcript) => {
+      setInput(initialInput + transcript);
+    },
+  });
+
+  const handleMicClick = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      setInitialInput(input);
+      startListening();
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -392,7 +418,22 @@ function App() {
                 className="w-full pl-6 pr-32 py-4 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all shadow-sm text-gray-700 placeholder-gray-400"
                 disabled={isLoading}
               />
-              <div className="absolute right-2 top-2 bottom-2">
+              <div className="absolute right-2 top-2 bottom-2 flex items-center gap-2">
+                {isSupported && (
+                  <Tooltip title={speechError || (isListening ? "点击停止录音" : "点击开始录音")}>
+                    <button
+                      onClick={handleMicClick}
+                      className={`h-full aspect-square rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95 ${
+                        isListening
+                          ? "bg-red-500 text-white animate-pulse ring-4 ring-red-200"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                      } ${speechError ? "border-red-500 border" : ""}`}
+                    >
+                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+                  </Tooltip>
+                )}
+
                 {isLoading ? (
                   <button
                     onClick={handleStop}
