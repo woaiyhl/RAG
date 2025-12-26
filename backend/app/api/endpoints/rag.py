@@ -45,28 +45,30 @@ async def upload_document(
         db.commit()
         db.refresh(db_doc)
         
-        # 1. Save file temporarily
+        # 1. Save file permanently
         file_ext = os.path.splitext(file.filename)[1]
-        temp_filename = f"{uuid.uuid4()}{file_ext}"
-        temp_path = os.path.join("data", temp_filename)
         
-        # Ensure data directory exists
-        os.makedirs("data", exist_ok=True)
+        # Ensure uploads directory exists
+        upload_dir = os.path.join("data", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
         
-        with open(temp_path, "wb") as buffer:
+        # Save with ID prefix to avoid collisions
+        file_path = os.path.join(upload_dir, f"{db_doc.id}_{file.filename}")
+        
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        file_size = os.path.getsize(temp_path)
+        file_size = os.path.getsize(file_path)
         db_doc.file_size = file_size
         db.commit()
         
-        logger.info(f"File saved locally at {temp_path}")
+        logger.info(f"File saved locally at {file_path}")
             
         # 2. Process document
         doc_service = DocumentService()
         logger.info("Starting document loading and splitting...")
         # Use run_in_threadpool for blocking I/O operations
-        chunks = await run_in_threadpool(doc_service.load_and_split, temp_path)
+        chunks = await run_in_threadpool(doc_service.load_and_split, file_path)
         logger.info(f"Document split into {len(chunks)} chunks")
         
         # Add file_id to metadata for all chunks
@@ -85,9 +87,8 @@ async def upload_document(
         db_doc.status = "processed"
         db.commit()
         
-        # Cleanup
-        os.remove(temp_path)
-        logger.info("Temporary file cleaned up")
+        # No cleanup needed as we want to keep the file for preview
+        # os.remove(file_path)
         
         return {"message": f"Successfully processed {file.filename}", "chunks": len(chunks), "doc_id": db_doc.id}
         
