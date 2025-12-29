@@ -24,6 +24,9 @@ import {
   Square,
   Mic,
   MicOff,
+  ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ConfigProvider, Tooltip } from "antd";
@@ -46,6 +49,8 @@ function App() {
   const [isDocManagerOpen, setIsDocManagerOpen] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
+  const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const skipFetchRef = useRef(false);
@@ -261,91 +266,130 @@ function App() {
     >
       <div className="flex h-screen bg-gray-100 font-sans overflow-hidden">
         {/* Sidebar - Dark Modern */}
-        <div className="w-80 bg-gray-900 text-white flex flex-col shadow-2xl z-10">
-          <div className="p-6 border-b border-gray-800">
-            <div className="flex items-center gap-3">
-              <div className="bg-primary-600 p-2 rounded-xl shadow-lg shadow-primary-900/20">
-                <Bot className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight">RAG Knowledge</h1>
-                <p className="text-xs text-gray-400 font-medium">智能知识库问答系统</p>
-              </div>
-            </div>
-          </div>
-
-          <Sidebar
-            currentConversationId={currentConversationId}
-            onSelectConversation={setCurrentConversationId}
-            onNewConversation={handleNewConversation}
-            refreshTrigger={refreshSidebarTrigger}
-          />
-
-          <div className="p-4 space-y-4 border-t border-gray-800 bg-gray-900/50 flex-shrink-0">
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-1">
-                知识库管理
-              </h3>
-              <label
-                className={`
-                  group flex flex-col items-center justify-center w-full h-20 
-                  border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200
-                  ${
-                    uploadStatus === "error"
-                      ? "border-red-500/50 bg-red-500/10"
-                      : uploadStatus === "success"
-                      ? "border-green-500/50 bg-green-500/10"
-                      : "border-gray-700 hover:border-primary-500 hover:bg-gray-800/50"
-                  }
-                `}
-              >
-                <div className="flex items-center gap-2">
-                  {isUploading ? (
-                    <Loader2 className="w-5 h-5 text-primary-500 animate-spin" />
-                  ) : uploadStatus === "success" ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  ) : uploadStatus === "error" ? (
-                    <AlertCircle className="w-5 h-5 text-red-500" />
-                  ) : (
-                    <Upload className="w-5 h-5 text-gray-500 group-hover:text-primary-400 transition-colors" />
-                  )}
-
-                  <span className="text-xs text-gray-400 group-hover:text-gray-300 font-medium">
-                    {isUploading
-                      ? "正在解析..."
-                      : uploadStatus === "success"
-                      ? "上传成功"
-                      : uploadStatus === "error"
-                      ? "上传失败"
-                      : "上传文档 (PDF/TXT)"}
-                  </span>
+        <motion.div
+          initial={{ width: 320 }}
+          animate={{ width: isSidebarOpen ? 320 : 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="bg-gray-900 text-white flex flex-col shadow-2xl z-10 overflow-hidden relative"
+        >
+          <div className="w-80 h-full flex flex-col">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-primary-600 p-2 rounded-xl shadow-lg shadow-primary-900/20">
+                  <Bot className="w-6 h-6 text-white" />
                 </div>
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={handleUpload}
-                  accept=".pdf,.txt,.md"
-                  disabled={isUploading}
-                />
-              </label>
+                <div>
+                  <h1 className="text-xl font-bold tracking-tight">RAG Knowledge</h1>
+                  <p className="text-xs text-gray-400 font-medium">智能知识库问答系统</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="text-gray-500 hover:text-white transition-colors p-1 rounded-md hover:bg-gray-800"
+                title="收起侧边栏"
+              >
+                <PanelLeftClose className="w-5 h-5" />
+              </button>
             </div>
 
-            <button
-              onClick={() => setIsDocManagerOpen(true)}
-              className="w-full flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg hover:bg-gray-800 hover:border-primary-500/50 transition-all group"
-            >
-              <Settings className="w-4 h-4 text-gray-400 group-hover:text-primary-400" />
-              <span className="text-xs text-gray-300 font-medium group-hover:text-white">
-                管理文档列表
-              </span>
-            </button>
+            <Sidebar
+              currentConversationId={currentConversationId}
+              onSelectConversation={setCurrentConversationId}
+              onNewConversation={handleNewConversation}
+              refreshTrigger={refreshSidebarTrigger}
+            />
 
-            <div className="flex items-center gap-2 text-gray-500 text-xs pt-2 border-t border-gray-800">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-              系统运行正常
+            <div className="border-t border-gray-800 bg-gray-900/50 flex-shrink-0">
+              <button
+                onClick={() => setIsKnowledgeBaseOpen(!isKnowledgeBaseOpen)}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-800/50 transition-colors group"
+              >
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider group-hover:text-gray-400 transition-colors">
+                  知识库管理
+                </h3>
+                <ChevronDown
+                  className={`w-4 h-4 text-gray-500 transition-transform duration-300 ease-in-out ${
+                    isKnowledgeBaseOpen ? "transform rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              <AnimatePresence initial={false}>
+                {isKnowledgeBaseOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-4 space-y-4">
+                      <div className="space-y-2">
+                        <label
+                          className={`
+                        group flex flex-col items-center justify-center w-full h-20 
+                        border-2 border-dashed rounded-xl cursor-pointer transition-all duration-200
+                        ${
+                          uploadStatus === "error"
+                            ? "border-red-500/50 bg-red-500/10"
+                            : uploadStatus === "success"
+                            ? "border-green-500/50 bg-green-500/10"
+                            : "border-gray-700 hover:border-primary-500 hover:bg-gray-800/50"
+                        }
+                      `}
+                        >
+                          <div className="flex items-center gap-2">
+                            {isUploading ? (
+                              <Loader2 className="w-5 h-5 text-primary-500 animate-spin" />
+                            ) : uploadStatus === "success" ? (
+                              <CheckCircle2 className="w-5 h-5 text-green-500" />
+                            ) : uploadStatus === "error" ? (
+                              <AlertCircle className="w-5 h-5 text-red-500" />
+                            ) : (
+                              <Upload className="w-5 h-5 text-gray-500 group-hover:text-primary-400 transition-colors" />
+                            )}
+
+                            <span className="text-xs text-gray-400 group-hover:text-gray-300 font-medium">
+                              {isUploading
+                                ? "正在解析..."
+                                : uploadStatus === "success"
+                                ? "上传成功"
+                                : uploadStatus === "error"
+                                ? "上传失败"
+                                : "上传文档 (PDF/TXT)"}
+                            </span>
+                          </div>
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={handleUpload}
+                            accept=".pdf,.txt,.md"
+                            disabled={isUploading}
+                          />
+                        </label>
+                      </div>
+
+                      <button
+                        onClick={() => setIsDocManagerOpen(true)}
+                        className="w-full flex items-center gap-3 px-3 py-2 bg-gray-800/50 border border-gray-700 rounded-lg hover:bg-gray-800 hover:border-primary-500/50 transition-all group"
+                      >
+                        <Settings className="w-4 h-4 text-gray-400 group-hover:text-primary-400" />
+                        <span className="text-xs text-gray-300 font-medium group-hover:text-white">
+                          管理文档列表
+                        </span>
+                      </button>
+
+                      <div className="flex items-center gap-2 text-gray-500 text-xs pt-2 border-t border-gray-800">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                        系统运行正常
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         <DocumentManager
           open={isDocManagerOpen}
@@ -357,10 +401,21 @@ function App() {
         <div className="flex-1 flex flex-col relative bg-white">
           {/* Header (Optional, mostly for mobile but good for spacing) */}
           <div className="h-16 border-b border-gray-100 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md sticky top-0 z-10">
-            <h2 className="text-gray-700 font-semibold flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary-500" />
-              AI 问答助手
-            </h2>
+            <div className="flex items-center gap-4">
+              {!isSidebarOpen && (
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="text-gray-500 hover:text-primary-600 transition-colors p-1.5 rounded-md hover:bg-gray-100"
+                  title="展开侧边栏"
+                >
+                  <PanelLeftOpen className="w-5 h-5" />
+                </button>
+              )}
+              <h2 className="text-gray-700 font-semibold flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary-500" />
+                AI 问答助手
+              </h2>
+            </div>
             <div className="text-sm text-gray-400">Based on RAG Technology</div>
           </div>
 
