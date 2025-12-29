@@ -9,6 +9,7 @@ import {
 import { DocumentManager } from "./components/DocumentManager";
 import { Sidebar } from "./components/Sidebar";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Send,
   Upload,
