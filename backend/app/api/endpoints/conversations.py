@@ -5,6 +5,7 @@ from app.services.conversation_service import ConversationService
 from app.schemas.conversation import Conversation, ConversationCreate, ConversationDetail, MessageCreate
 from app.services.rag_engine import RAGEngine
 from fastapi.responses import StreamingResponse
+from fastapi.concurrency import run_in_threadpool
 from typing import List
 import json
 import logging

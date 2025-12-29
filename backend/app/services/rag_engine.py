@@ -98,14 +98,21 @@ class RAGEngine:
             return
 
         # Real RAG Streaming
+        import time
+        start_time = time.time()
+        print(f"[{start_time}] Starting RAG pipeline for query: {query}")
+
         retriever = self.vector_store_service.vector_db.as_retriever(
             search_type="similarity",
             search_kwargs={"k": 4}
         )
         
         try:
+            print(f"[{time.time()}] Starting retrieval...")
             docs = await retriever.aget_relevant_documents(query)
+            print(f"[{time.time()}] Retrieval complete. Found {len(docs)} docs. Time taken: {time.time() - start_time:.2f}s")
         except Exception as e:
+            print(f"[{time.time()}] Retrieval failed: {e}")
             yield {"error": f"Retrieval failed: {str(e)}"}
             return
 
@@ -127,9 +134,18 @@ class RAGEngine:
         ]
         
         # Stream from LLM
+        print(f"[{time.time()}] Starting LLM generation...")
+        llm_start_time = time.time()
+        first_token_received = False
+        
         async for chunk in self.llm.astream(messages):
+            if not first_token_received:
+                first_token_received = True
+                print(f"[{time.time()}] First token received. Time to first token: {time.time() - llm_start_time:.2f}s")
+            
             if chunk.content:
                 yield {"answer": chunk.content}
+        
+        print(f"[{time.time()}] LLM generation complete. Total time: {time.time() - start_time:.2f}s")
                 
-        # Send sources at the end
-        yield {"sources": [doc.page_content for doc in docs]}
+        # Sources already sent at the beginning
