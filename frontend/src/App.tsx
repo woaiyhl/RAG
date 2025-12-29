@@ -209,6 +209,9 @@ function App() {
           setMessages((prev) =>
             prev.map((msg) => {
               if (msg.id === assistantMsgId) {
+                if (data.error) {
+                  return { ...msg, content: msg.content + `\n\n❌ 错误: ${data.error}` };
+                }
                 if (data.answer) {
                   return { ...msg, content: msg.content + data.answer };
                 }

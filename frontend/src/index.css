@@ -9,9 +9,16 @@
 }
 
 /* Custom Scrollbar */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 transparent;
+}
+
+/* Chrome, Edge, Safari */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -19,11 +26,36 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 rounded-full;
+  @apply bg-gray-400/80 rounded-full transition-colors;
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400;
+  @apply bg-gray-500/80;
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Dark theme scrollbar override for dark backgrounds */
+.dark-theme-scroll {
+  scrollbar-color: #4b5563 transparent;
+}
+
+.dark-theme-scroll::-webkit-scrollbar-thumb {
+  @apply bg-gray-600/80;
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+.dark-theme-scroll::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500/80;
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 
 /* Markdown Styles */

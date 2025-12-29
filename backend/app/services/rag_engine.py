@@ -44,7 +44,7 @@ class RAGEngine:
 
         retriever = self.vector_store_service.vector_db.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 60}
+            search_kwargs={"k": 4}
         )
         
         qa_chain = RetrievalQA.from_chain_type(
@@ -66,7 +66,7 @@ class RAGEngine:
 
         retriever = self.vector_store_service.vector_db.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 60}
+            search_kwargs={"k": 4}
         )
         
         qa_chain = RetrievalQA.from_chain_type(
@@ -100,10 +100,19 @@ class RAGEngine:
         # Real RAG Streaming
         retriever = self.vector_store_service.vector_db.as_retriever(
             search_type="similarity",
-            search_kwargs={"k": 60}
+            search_kwargs={"k": 4}
         )
         
-        docs = await retriever.aget_relevant_documents(query)
+        try:
+            docs = await retriever.aget_relevant_documents(query)
+        except Exception as e:
+            yield {"error": f"Retrieval failed: {str(e)}"}
+            return
+
+        if not docs:
+             yield {"answer": "抱歉，没有在知识库中找到相关内容。"}
+             return
+
         context = "\n\n".join([doc.page_content for doc in docs])
         
         # Manually construct prompt to control streaming

@@ -155,7 +155,7 @@ export const updateConversationTitle = async (id: string, title: string) => {
 export const chatStreamWithConversation = async (
   conversationId: string,
   query: string,
-  onChunk: (data: { answer?: string; sources?: string[] }) => void,
+  onChunk: (data: { answer?: string; sources?: string[]; error?: string }) => void,
   onError: (error: any) => void,
   onFinish: () => void,
   signal?: AbortSignal,

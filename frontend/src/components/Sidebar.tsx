@@ -59,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 mt-4">
+    <div className="flex-1 overflow-y-auto px-2 mt-4 dark-theme-scroll">
       <button
         onClick={onNewConversation}
         className="w-full flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors mb-4"
