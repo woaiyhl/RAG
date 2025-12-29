@@ -63,7 +63,12 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
         print(f"Error deleting file: {e}")
     
     # 3. Delete from Database
-    db.delete(document)
-    db.commit()
+    try:
+        db.delete(document)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting from database: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     return {"message": "Document deleted successfully"}

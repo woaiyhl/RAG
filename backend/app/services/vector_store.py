@@ -44,7 +44,7 @@ class VectorStoreService:
         # We assume that when adding documents, we add metadata={"file_id": str(db_doc.id)}
         try:
             self.vector_db._collection.delete(where={"file_id": file_id})
-            self.vector_db.persist()
+            # self.vector_db.persist() # Deprecated in Chroma 0.4.x
             print(f"Deleted vectors for file_id: {file_id}")
         except Exception as e:
             print(f"Error deleting vectors for file_id {file_id}: {str(e)}")
