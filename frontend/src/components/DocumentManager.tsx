@@ -11,6 +11,8 @@ import {
 import { Trash2 } from "lucide-react";
 import type { ColumnsType } from "antd/es/table";
 import { getDocuments, deleteDocument, Document } from "../services/api";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface DocumentManagerProps {
   open: boolean;
@@ -29,6 +31,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mdContent, setMdContent] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -63,14 +67,40 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     }
   };
 
-  const handlePreview = (record: Document) => {
-    setPreviewUrl(`/api/v1/documents/${record.id}/preview`);
+  const handlePreview = async (record: Document) => {
+    console.log("Previewing file:", record.filename);
+    const filename = record.filename.trim().toLowerCase();
+
     setPreviewTitle(record.filename);
     setIsFullscreen(false);
+    setMdContent(null);
+    setPreviewUrl(null);
+
+    if (filename.endsWith(".md") || filename.endsWith(".markdown")) {
+      console.log("Detected Markdown file");
+      setLoadingPreview(true);
+      try {
+        const response = await fetch(`/api/v1/documents/${record.id}/preview`);
+        if (!response.ok) throw new Error("Failed to load content");
+        const text = await response.text();
+        console.log("Markdown content loaded, length:", text.length);
+        setMdContent(text);
+      } catch (error) {
+        console.error("Failed to load markdown content:", error);
+        message.error("无法加载 Markdown 内容");
+      } finally {
+        setLoadingPreview(false);
+      }
+    } else {
+      console.log("Not a Markdown file, using iframe preview");
+      setPreviewUrl(`/api/v1/documents/${record.id}/preview`);
+    }
   };
 
   const closePreview = () => {
     setPreviewUrl(null);
+    setMdContent(null);
+    setLoadingPreview(false);
     setPreviewTitle("");
     setIsFullscreen(false);
   };
@@ -212,7 +242,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       </Modal>
 
       <Modal
-        open={!!previewUrl}
+        open={!!previewUrl || !!mdContent || loadingPreview}
         title={
           <div className="flex items-center justify-between pr-8">
             <span>{previewTitle}</span>
@@ -236,12 +266,24 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         centered={!isFullscreen}
         zIndex={1001} // Ensure it's above the document manager modal
       >
-        {previewUrl && (
-          <iframe
-            src={previewUrl}
-            className="w-full h-full border-0 rounded-b-lg"
-            title="Document Preview"
-          />
+        {loadingPreview ? (
+          <div className="flex justify-center items-center h-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        ) : mdContent ? (
+          <div className="p-8 overflow-y-auto h-full bg-white">
+            <article className="prose prose-slate max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{mdContent}</ReactMarkdown>
+            </article>
+          </div>
+        ) : (
+          previewUrl && (
+            <iframe
+              src={previewUrl}
+              className="w-full h-full border-0 rounded-b-lg"
+              title="Document Preview"
+            />
+          )
         )}
       </Modal>
     </>

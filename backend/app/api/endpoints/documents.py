@@ -32,10 +32,16 @@ def get_document_preview(document_id: int, db: Session = Depends(get_db)):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on server")
         
+    media_type = "text/plain"
+    if document.filename.lower().endswith('.pdf'):
+        media_type = "application/pdf"
+    elif document.filename.lower().endswith('.md'):
+        media_type = "text/markdown"
+
     return FileResponse(
         path=file_path,
         filename=document.filename,
-        media_type="application/pdf" if document.filename.lower().endswith('.pdf') else "text/plain",
+        media_type=media_type,
         content_disposition_type="inline"
     )
 

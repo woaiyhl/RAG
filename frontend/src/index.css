@@ -100,3 +100,15 @@
 .prose blockquote {
   @apply border-l-4 border-primary-200 pl-4 italic text-gray-600 my-4;
 }
+
+.prose table {
+  @apply w-full text-left border-collapse my-4;
+}
+
+.prose th {
+  @apply bg-gray-50 p-2 border border-gray-200 font-semibold text-gray-700;
+}
+
+.prose td {
+  @apply p-2 border border-gray-200 text-gray-600;
+}

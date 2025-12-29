@@ -359,7 +359,7 @@ function App() {
                                 ? "上传成功"
                                 : uploadStatus === "error"
                                 ? "上传失败"
-                                : "上传文档 (PDF/TXT)"}
+                                : "上传文档 (PDF/TXT/MD)"}
                             </span>
                           </div>
                           <input
@@ -486,6 +486,7 @@ function App() {
                           className={`prose prose-sm max-w-none ${
                             msg.role === "user" ? "prose-invert" : ""
                           }`}
+                          remarkPlugins={[remarkGfm]}
                         >
                           {msg.content}
                         </ReactMarkdown>
