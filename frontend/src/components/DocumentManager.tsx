@@ -3,12 +3,11 @@ import { Modal, Table, Button, Tag, Popconfirm, message, Space, Tooltip } from "
 import {
   FileTextOutlined,
   ReloadOutlined,
-  EyeOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
   CloseOutlined,
 } from "@ant-design/icons";
-import { Trash2 } from "lucide-react";
+import { Trash2, Eye } from "lucide-react";
 import type { ColumnsType } from "antd/es/table";
 import { getDocuments, deleteDocument, Document } from "../services/api";
 import ReactMarkdown from "react-markdown";
@@ -180,7 +179,12 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       render: (_, record) => (
         <Space>
           <Tooltip title="预览">
-            <Button type="text" icon={<EyeOutlined />} onClick={() => handlePreview(record)} />
+            <button
+              onClick={() => handlePreview(record)}
+              className="p-1 hover:text-blue-600 transition-opacity"
+            >
+              <Eye size={16} />
+            </button>
           </Tooltip>
           <Popconfirm
             title="删除文档"
