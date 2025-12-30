@@ -307,10 +307,12 @@ class RAGEngine:
         for doc in docs:
             if doc.metadata.get("type") == "web_search":
                 # For Web Search, provide Title and URL
-                source_str = f"【Web搜索】{doc.metadata.get('title', '无标题')}\n链接: {doc.metadata.get('source', '无链接')}\n摘要: {doc.page_content[:100]}..."
+                # Increase snippet length for web search
+                source_str = f"【Web搜索】{doc.metadata.get('title', '无标题')}\n链接: {doc.metadata.get('source', '无链接')}\n摘要: {doc.page_content[:500]}..."
                 sources_list.append(source_str)
             else:
                 # For local documents, provide content snippet
-                sources_list.append(doc.page_content[:200] + "...")
+                # Increase snippet length significantly for better reading experience
+                sources_list.append(doc.page_content[:1000] + "...")
                 
         yield {"sources": sources_list}

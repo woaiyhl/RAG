@@ -26,10 +26,12 @@ import {
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ConfigProvider, Tooltip } from "antd";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
+import { ReferenceSidebar } from "./components/ReferenceSidebar";
 
 interface Message {
   role: "user" | "assistant";
@@ -50,6 +52,11 @@ function App() {
   const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
   const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Reference Sidebar State
+  const [isRefSidebarOpen, setIsRefSidebarOpen] = useState(false);
+  const [activeReferences, setActiveReferences] = useState<string[]>([]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const skipFetchRef = useRef(false);
@@ -117,6 +124,11 @@ function App() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleViewReferences = (sources: string[]) => {
+    setActiveReferences(sources);
+    setIsRefSidebarOpen(true);
   };
 
   useEffect(() => {
@@ -399,6 +411,12 @@ function App() {
           refreshTrigger={refreshDocsTrigger}
         />
 
+        <ReferenceSidebar
+          isOpen={isRefSidebarOpen}
+          onClose={() => setIsRefSidebarOpen(false)}
+          sources={activeReferences}
+        />
+
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col relative bg-white">
           {/* Header (Optional, mostly for mobile but good for spacing) */}
@@ -493,27 +511,16 @@ function App() {
                     </div>
 
                     {msg.sources && msg.sources.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="ml-2"
-                      >
-                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-200/60 text-sm space-y-3">
-                          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                            <BookOpen className="w-3.5 h-3.5" /> 参考来源
-                          </p>
-                          <div className="grid gap-2">
-                            {msg.sources.map((source, i) => (
-                              <div
-                                key={i}
-                                className="bg-white p-3 rounded-lg border border-gray-200 text-gray-600 text-xs leading-relaxed shadow-sm"
-                              >
-                                {source}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </motion.div>
+                      <div className="mt-2">
+                        <button
+                          onClick={() => handleViewReferences(msg.sources!)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-full text-xs font-medium text-gray-600 transition-colors group"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-gray-400 group-hover:text-primary-500 transition-colors" />
+                          参考 {msg.sources.length} 篇资料
+                          <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-gray-600 transition-colors" />
+                        </button>
+                      </div>
                     )}
                   </div>
 

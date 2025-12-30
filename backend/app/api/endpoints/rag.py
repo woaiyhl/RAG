@@ -114,7 +114,7 @@ async def chat(request: ChatRequest):
         rag_engine = RAGEngine()
         result = await rag_engine.aget_answer(request.query)
         
-        sources = [doc.page_content[:200] + "..." for doc in result.get("source_documents", [])]
+        sources = [doc.page_content[:1000] + "..." for doc in result.get("source_documents", [])]
         
         return ChatResponse(
             answer=result["result"],
