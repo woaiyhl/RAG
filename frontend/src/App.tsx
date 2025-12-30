@@ -34,25 +34,37 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ConfigProvider, Tooltip, message } from "antd";
+import { useChatStore } from "./store/useChatStore";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { ReferenceSidebar } from "./components/ReferenceSidebar";
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  sources?: string[];
-  id: string;
-}
+// interface Message removed as it is imported from store
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const {
+    activeId,
+    setActiveId,
+    conversations,
+    initConversation,
+    setMessages: setStoreMessages,
+    addMessage,
+    updateMessage,
+    setLoading: setStoreLoading,
+    setAbortController,
+    deleteMessageFromStore,
+    abortRequest,
+  } = useChatStore();
+
+  const currentConversation = activeId ? conversations[activeId] : null;
+  const messages = currentConversation?.messages || [];
+  const isLoading = currentConversation?.isLoading || false;
+
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
   const [refreshDocsTrigger, setRefreshDocsTrigger] = useState(0);
   const [isDocManagerOpen, setIsDocManagerOpen] = useState(false);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  // currentConversationId replaced by activeId from store
   const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
   const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -63,18 +75,28 @@ function App() {
   const [activeQuery, setActiveQuery] = useState<string>("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // abortControllerRef removed, managed by store
   const skipFetchRef = useRef(false);
 
   // Load conversation history
   useEffect(() => {
-    if (currentConversationId) {
+    if (activeId) {
+      if (conversations[activeId]?.isLoading) {
+        // If loading, do not overwrite messages, just ensure it's initialized
+        return;
+      }
+
       if (skipFetchRef.current) {
         skipFetchRef.current = false;
         return;
       }
-      setIsLoading(true);
-      getConversation(currentConversationId)
+
+      // Init if not exists (though fetch will set it)
+      initConversation(activeId);
+
+      // We don't set global loading here to avoid flickering or blocking UI
+      // just fetch and update
+      getConversation(activeId)
         .then((data) => {
           const formattedMessages = data.messages.map((msg) => ({
             id: msg.id.toString(),
@@ -82,26 +104,20 @@ function App() {
             content: msg.content,
             sources: msg.sources ? JSON.parse(msg.sources) : undefined,
           }));
-          setMessages(formattedMessages);
+          setStoreMessages(activeId, formattedMessages);
         })
         .catch((err) => {
           console.error(err);
-        })
-        .finally(() => {
-          setIsLoading(false);
         });
     } else {
-      setMessages([]);
+      // activeId is null (New Chat), nothing to load
     }
-  }, [currentConversationId]);
+  }, [activeId]);
 
   const handleNewConversation = () => {
-    setCurrentConversationId(null);
-    setMessages([]);
+    setActiveId(null);
     setInput("");
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    // Do NOT abort requests here
   };
 
   // 语音输入相关逻辑
@@ -166,36 +182,22 @@ function App() {
       setRefreshDocsTrigger((prev) => prev + 1);
       setTimeout(() => setUploadStatus("idle"), 3000);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: `**文档解析成功** \n\n已成功收录文档 "${file.name}"。我现在已经学习了其中的内容，您可以随时向我提问。`,
-        },
-      ]);
+      message.success(`已成功收录文档 "${file.name}"`);
     } catch (error) {
       console.error(error);
       setUploadStatus("error");
       setTimeout(() => setUploadStatus("idle"), 3000);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "**上传失败** \n\n抱歉，文档处理过程中出现了问题，请稍后重试。",
-        },
-      ]);
+      message.error("文档上传失败");
     } finally {
       setIsUploading(false);
     }
   };
 
   const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-      setIsLoading(false);
+    if (activeId) {
+      abortRequest(activeId);
+      setAbortController(activeId, null);
+      setStoreLoading(activeId, false);
     }
   };
 
@@ -205,10 +207,10 @@ function App() {
   };
 
   const handleDelete = async (messageId: string) => {
-    setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
-    if (currentConversationId) {
+    if (activeId) {
+      deleteMessageFromStore(activeId, messageId);
       try {
-        await deleteMessage(currentConversationId, parseInt(messageId));
+        await deleteMessage(activeId, parseInt(messageId));
         message.success("删除成功");
       } catch (error) {
         console.error("Failed to delete message:", error);
@@ -242,81 +244,98 @@ function App() {
     const assistantMsgId = msg.id;
     const userMsgId = userMsg.id;
 
-    setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId && m.id !== userMsgId));
+    if (activeId) {
+      deleteMessageFromStore(activeId, assistantMsgId);
+      deleteMessageFromStore(activeId, userMsgId);
 
-    if (currentConversationId) {
       try {
-        await deleteMessage(currentConversationId, parseInt(assistantMsgId));
-        await deleteMessage(currentConversationId, parseInt(userMsgId));
+        await deleteMessage(activeId, parseInt(assistantMsgId));
+        await deleteMessage(activeId, parseInt(userMsgId));
       } catch (error) {
         console.error("Failed to delete messages for regeneration:", error);
       }
+      handleSend(userQuery);
     }
-
-    handleSend(userQuery);
   };
 
   const handleSend = async (overrideInput?: string | React.SyntheticEvent) => {
     const textToSend = typeof overrideInput === "string" ? overrideInput : input;
-    if (!textToSend.trim() || isLoading) return;
+    // Check global loading or specific loading?
+    // We should prevent sending if THIS conversation is loading.
+    // But since handleSend is usually triggered from UI where activeId is set...
+    const conversationId = activeId;
+    if (!textToSend.trim() || (conversationId && conversations[conversationId]?.isLoading)) return;
 
     const userMessage = textToSend;
     if (textToSend === input) setInput("");
 
     const tempId = Date.now().toString();
-    setMessages((prev) => [...prev, { id: tempId, role: "user", content: userMessage }]);
-    setIsLoading(true);
 
-    let conversationId = currentConversationId;
+    // We need a conversation ID. If none, create one.
+    let targetConversationId = conversationId;
 
     try {
-      if (!conversationId) {
+      if (!targetConversationId) {
         const newConv = await createConversation();
-        conversationId = newConv.id;
+        targetConversationId = newConv.id;
+        initConversation(targetConversationId);
+        setActiveId(targetConversationId);
         skipFetchRef.current = true;
-        setCurrentConversationId(conversationId);
         setRefreshSidebarTrigger((prev) => prev + 1);
       }
 
+      // Optimistic updates
+      addMessage(targetConversationId, { id: tempId, role: "user", content: userMessage });
+      setStoreLoading(targetConversationId, true);
+
       const controller = new AbortController();
-      abortControllerRef.current = controller;
+      setAbortController(targetConversationId, controller);
 
       const assistantMsgId = (Date.now() + 1).toString();
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: assistantMsgId,
-          role: "assistant",
-          content: "",
-        },
-      ]);
+      let currentAssistantId = assistantMsgId; // Mutable ID reference
+
+      addMessage(targetConversationId, {
+        id: assistantMsgId,
+        role: "assistant",
+        content: "",
+      });
 
       await chatStreamWithConversation(
-        conversationId,
+        targetConversationId,
         userMessage,
         (data) => {
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.id === assistantMsgId) {
-                if (data.error) {
-                  return { ...msg, content: msg.content + `\n\n❌ 错误: ${data.error}` };
-                }
-                if (data.answer) {
-                  return { ...msg, content: msg.content + data.answer };
-                }
-                if (data.sources) {
-                  return { ...msg, sources: data.sources };
-                }
-                if (data.message_id) {
-                  return { ...msg, id: data.message_id.toString() };
-                }
-              }
-              if (msg.id === tempId && data.user_message_id) {
-                return { ...msg, id: data.user_message_id.toString() };
-              }
-              return msg;
-            }),
-          );
+          if (data.error) {
+            updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
+              ...msg,
+              content: msg.content + `\n\n❌ 错误: ${data.error}`,
+            }));
+          }
+          if (data.answer) {
+            updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
+              ...msg,
+              content: msg.content + data.answer,
+            }));
+          }
+          if (data.sources) {
+            updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
+              ...msg,
+              sources: data.sources,
+            }));
+          }
+          if (data.message_id) {
+            const newId = data.message_id.toString();
+            updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
+              ...msg,
+              id: newId,
+            }));
+            currentAssistantId = newId;
+          }
+          if (data.user_message_id) {
+            updateMessage(targetConversationId!, tempId, (msg) => ({
+              ...msg,
+              id: data.user_message_id!.toString(),
+            }));
+          }
         },
         (error) => {
           if (error.name === "AbortError") {
@@ -324,33 +343,28 @@ function App() {
             return;
           }
           console.error(error);
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.id === assistantMsgId) {
-                return { ...msg, content: msg.content + "\n\n❌ 发生错误，请重试。" };
-              }
-              return msg;
-            }),
-          );
+          updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
+            ...msg,
+            content: msg.content + "\n\n❌ 发生错误，请重试。",
+          }));
         },
         () => {
-          setIsLoading(false);
-          abortControllerRef.current = null;
+          setStoreLoading(targetConversationId!, false);
+          setAbortController(targetConversationId!, null);
           setRefreshSidebarTrigger((prev) => prev + 1);
         },
         controller.signal,
       );
     } catch (error) {
       console.error(error);
-      setIsLoading(false);
-      setMessages((prev) => [
-        ...prev,
-        {
+      if (targetConversationId) {
+        setStoreLoading(targetConversationId, false);
+        addMessage(targetConversationId, {
           id: Date.now().toString(),
           role: "assistant",
           content: "❌ 抱歉，遇到了一些问题，请稍后重试。",
-        },
-      ]);
+        });
+      }
     }
   };
 
@@ -391,8 +405,8 @@ function App() {
             </div>
 
             <Sidebar
-              currentConversationId={currentConversationId}
-              onSelectConversation={setCurrentConversationId}
+              currentConversationId={activeId}
+              onSelectConversation={setActiveId}
               onNewConversation={handleNewConversation}
               refreshTrigger={refreshSidebarTrigger}
             />

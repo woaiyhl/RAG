@@ -278,7 +278,6 @@ class RAGEngine:
         if is_refusal and not is_web_search:
              print(f"[{time.time()}] LLM indicated refusal in stream. Triggering Web Search Fallback...")
              try:
-                yield {"answer": "\n\n（检测到本地知识库无法回答，正在尝试联网搜索...）\n\n"}
                 from app.services.web_search import WebSearchService
                 web_docs = await WebSearchService.asearch(query)
                 
