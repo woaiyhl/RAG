@@ -100,6 +100,7 @@ function App() {
         .then((data) => {
           const formattedMessages = data.messages.map((msg) => ({
             id: msg.id.toString(),
+            uid: msg.id.toString(), // Use DB ID as UID for historical messages
             role: msg.role,
             content: msg.content,
             sources: msg.sources ? JSON.parse(msg.sources) : undefined,
@@ -285,17 +286,24 @@ function App() {
       }
 
       // Optimistic updates
-      addMessage(targetConversationId, { id: tempId, role: "user", content: userMessage });
+      addMessage(targetConversationId, {
+        id: tempId,
+        uid: tempId,
+        role: "user",
+        content: userMessage,
+      });
       setStoreLoading(targetConversationId, true);
 
       const controller = new AbortController();
       setAbortController(targetConversationId, controller);
 
       const assistantMsgId = (Date.now() + 1).toString();
+      const assistantMsgUid = assistantMsgId; // UID stays constant
       let currentAssistantId = assistantMsgId; // Mutable ID reference
 
       addMessage(targetConversationId, {
         id: assistantMsgId,
+        uid: assistantMsgUid,
         role: "assistant",
         content: "",
       });
@@ -359,8 +367,10 @@ function App() {
       console.error(error);
       if (targetConversationId) {
         setStoreLoading(targetConversationId, false);
+        const errorMsgId = Date.now().toString();
         addMessage(targetConversationId, {
-          id: Date.now().toString(),
+          id: errorMsgId,
+          uid: errorMsgId,
           role: "assistant",
           content: "❌ 抱歉，遇到了一些问题，请稍后重试。",
         });
@@ -557,7 +567,7 @@ function App() {
             <AnimatePresence>
               {messages.map((msg) => (
                 <motion.div
-                  key={msg.id}
+                  key={msg.uid}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
