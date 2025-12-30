@@ -56,6 +56,7 @@ function App() {
   // Reference Sidebar State
   const [isRefSidebarOpen, setIsRefSidebarOpen] = useState(false);
   const [activeReferences, setActiveReferences] = useState<string[]>([]);
+  const [activeQuery, setActiveQuery] = useState<string>("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -126,8 +127,22 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleViewReferences = (sources: string[]) => {
+  const handleViewReferences = (sources: string[], messageId: string) => {
     setActiveReferences(sources);
+
+    // Find the user query corresponding to this assistant message
+    const msgIndex = messages.findIndex((m) => m.id === messageId);
+    let query = "";
+    if (msgIndex > 0) {
+      // Look backwards for the nearest user message
+      for (let i = msgIndex - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          query = messages[i].content;
+          break;
+        }
+      }
+    }
+    setActiveQuery(query);
     setIsRefSidebarOpen(true);
   };
 
@@ -415,6 +430,7 @@ function App() {
           isOpen={isRefSidebarOpen}
           onClose={() => setIsRefSidebarOpen(false)}
           sources={activeReferences}
+          query={activeQuery}
         />
 
         {/* Main Chat Area */}
@@ -513,7 +529,7 @@ function App() {
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mt-2">
                         <button
-                          onClick={() => handleViewReferences(msg.sources!)}
+                          onClick={() => handleViewReferences(msg.sources!, msg.id)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-full text-xs font-medium text-gray-600 transition-colors group"
                         >
                           <BookOpen className="w-3.5 h-3.5 text-gray-400 group-hover:text-primary-500 transition-colors" />
