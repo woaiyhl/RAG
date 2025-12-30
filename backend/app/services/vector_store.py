@@ -1,9 +1,14 @@
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import FakeEmbeddings
+from langchain.retrievers import BM25Retriever, EnsembleRetriever
 from app.core.config import settings
 from typing import List
 from langchain_core.documents import Document
+import jieba
+
+def chinese_tokenizer(text):
+    return list(jieba.cut(text))
 
 class VectorStoreService:
     def __init__(self):
@@ -53,3 +58,50 @@ class VectorStoreService:
     def similarity_search(self, query: str, k: int = 4) -> List[Document]:
         """Search for similar documents."""
         return self.vector_db.similarity_search(query, k=k)
+
+    def get_retriever(self, search_type="similarity", k=4):
+        """Get retriever based on search type."""
+        chroma_retriever = self.vector_db.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": k}
+        )
+        
+        if search_type == "hybrid":
+            try:
+                # Get all documents from Chroma to build BM25 index
+                # Note: This might be slow for large datasets
+                collection_data = self.vector_db.get()
+                texts = collection_data['documents']
+                metadatas = collection_data['metadatas']
+                
+                if not texts:
+                    print("Warning: No documents found in vector store for hybrid search fallback.")
+                    return chroma_retriever
+
+                # Reconstruct Document objects
+                docs = []
+                for i in range(len(texts)):
+                    meta = metadatas[i] if metadatas and i < len(metadatas) else {}
+                    # Ensure metadata is a dict
+                    if meta is None:
+                        meta = {}
+                    docs.append(Document(page_content=texts[i], metadata=meta))
+                
+                # Build BM25 Retriever
+                bm25_retriever = BM25Retriever.from_documents(
+                    docs, 
+                    preprocess_func=chinese_tokenizer
+                )
+                bm25_retriever.k = k
+                
+                # Create Ensemble Retriever
+                ensemble_retriever = EnsembleRetriever(
+                    retrievers=[bm25_retriever, chroma_retriever],
+                    weights=[0.5, 0.5]
+                )
+                return ensemble_retriever
+            except Exception as e:
+                print(f"Error initializing hybrid retriever: {e}. Falling back to similarity search.")
+                return chroma_retriever
+                
+        return chroma_retriever

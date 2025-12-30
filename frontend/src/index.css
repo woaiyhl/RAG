@@ -78,7 +78,7 @@
 }
 
 .prose p {
-  @apply leading-relaxed mb-3;
+  @apply leading-relaxed;
 }
 
 .prose ul {

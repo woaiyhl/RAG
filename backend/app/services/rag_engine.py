@@ -42,10 +42,7 @@ class RAGEngine:
                 ]
             }
 
-        retriever = self.vector_store_service.vector_db.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 4}
-        )
+        retriever = self.vector_store_service.get_retriever(search_type="hybrid", k=4)
         
         qa_chain = RetrievalQA.from_chain_type(
             llm=self.llm,
@@ -64,10 +61,7 @@ class RAGEngine:
             await asyncio.sleep(1)
             return self.get_answer(query)
 
-        retriever = self.vector_store_service.vector_db.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 4}
-        )
+        retriever = self.vector_store_service.get_retriever(search_type="hybrid", k=4)
         
         qa_chain = RetrievalQA.from_chain_type(
             llm=self.llm,
@@ -101,11 +95,9 @@ class RAGEngine:
         import time
         start_time = time.time()
         print(f"[{start_time}] Starting RAG pipeline for query: {query}")
-
-        retriever = self.vector_store_service.vector_db.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 4}
-        )
+        
+        # 使用混合检索
+        retriever = self.vector_store_service.get_retriever(search_type="hybrid", k=4)
         
         try:
             print(f"[{time.time()}] Starting retrieval...")
