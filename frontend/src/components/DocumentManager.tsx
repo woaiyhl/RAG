@@ -6,6 +6,7 @@ import {
   EyeOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import { Trash2 } from "lucide-react";
 import type { ColumnsType } from "antd/es/table";
@@ -242,16 +243,34 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
       <Modal
         open={!!previewUrl || !!mdContent || loadingPreview}
+        closable={false}
         title={
-          <div className="flex items-center justify-between pr-8">
-            <span>{previewTitle}</span>
-            <Tooltip title={isFullscreen ? "退出全屏" : "全屏"}>
-              <Button
-                type="text"
-                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-                onClick={toggleFullscreen}
-              />
-            </Tooltip>
+          <div className="flex items-center justify-between py-1">
+            <span
+              className="text-base font-medium text-gray-700 truncate max-w-2xl"
+              title={previewTitle}
+            >
+              {previewTitle}
+            </span>
+            <div className="flex items-center gap-1">
+              <Tooltip title={isFullscreen ? "退出全屏" : "全屏"}>
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex items-center justify-center"
+                >
+                  {isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                </button>
+              </Tooltip>
+              <div className="w-px h-4 bg-gray-200 mx-1"></div>
+              <Tooltip title="关闭">
+                <button
+                  onClick={closePreview}
+                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors flex items-center justify-center"
+                >
+                  <CloseOutlined />
+                </button>
+              </Tooltip>
+            </div>
           </div>
         }
         onCancel={closePreview}
@@ -261,7 +280,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           isFullscreen ? { top: 0, padding: 0, maxWidth: "100vw", height: "100vh" } : undefined
         }
         styles={{ body: { height: isFullscreen ? "calc(100vh - 55px)" : "80vh", padding: 0 } }}
-        destroyOnClose
+        destroyOnHidden
         centered={!isFullscreen}
         zIndex={1001} // Ensure it's above the document manager modal
       >
