@@ -58,6 +58,17 @@ def delete_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"ok": True}
 
+@router.delete("/{conversation_id}/messages/{message_id}")
+def delete_message(
+    conversation_id: str,
+    message_id: int,
+    db: Session = Depends(get_db)
+):
+    success = conversation_service.delete_message(db, conversation_id, message_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return {"ok": True}
+
 @router.post("/{conversation_id}/chat")
 async def chat_stream(
     conversation_id: str,
@@ -71,7 +82,8 @@ async def chat_stream(
 
     # 2. Save User Message
     user_msg = MessageCreate(role="user", content=request.query)
-    conversation_service.add_message(db, conversation_id, user_msg)
+    db_user_msg = conversation_service.add_message(db, conversation_id, user_msg)
+    user_msg_id = db_user_msg.id
 
     # 3. Stream Response
     rag_engine = RAGEngine()
@@ -98,7 +110,10 @@ async def chat_stream(
                     content=full_answer,
                     sources=json.dumps(sources) if sources else None
                 )
-                service.add_message(session, conversation_id, assistant_msg)
+                saved_msg = service.add_message(session, conversation_id, assistant_msg)
+                
+                # Send final IDs
+                yield f"data: {json.dumps({'message_id': saved_msg.id, 'user_message_id': user_msg_id})}\n\n"
                 
         except Exception as e:
             logger.error(f"Error in chat stream: {str(e)}", exc_info=True)

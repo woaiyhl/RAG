@@ -67,6 +67,14 @@ class ConversationService:
         db.refresh(db_message)
         return db_message
     
+    def delete_message(self, db: Session, conversation_id: str, message_id: int) -> bool:
+        db_message = db.query(Message).filter(Message.id == message_id, Message.conversation_id == conversation_id).first()
+        if db_message:
+            db.delete(db_message)
+            db.commit()
+            return True
+        return False
+
     def get_messages(self, db: Session, conversation_id: str) -> List[Message]:
         return db.query(Message).filter(Message.conversation_id == conversation_id).order_by(Message.created_at.asc()).all()
 

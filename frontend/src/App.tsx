@@ -4,6 +4,7 @@ import {
   createConversation,
   getConversation,
   chatStreamWithConversation,
+  deleteMessage,
 } from "./services/api";
 import { DocumentManager } from "./components/DocumentManager";
 import { Sidebar } from "./components/Sidebar";
@@ -27,9 +28,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronRight,
+  Copy,
+  RotateCw,
+  Trash2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ConfigProvider, Tooltip } from "antd";
+import { ConfigProvider, Tooltip, message } from "antd";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { ReferenceSidebar } from "./components/ReferenceSidebar";
 
@@ -195,11 +199,70 @@ function App() {
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleCopy = (content: string) => {
+    navigator.clipboard.writeText(content);
+    message.success("已复制到剪贴板");
+  };
 
-    const userMessage = input;
-    setInput("");
+  const handleDelete = async (messageId: string) => {
+    setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+    if (currentConversationId) {
+      try {
+        await deleteMessage(currentConversationId, parseInt(messageId));
+        message.success("删除成功");
+      } catch (error) {
+        console.error("Failed to delete message:", error);
+      }
+    }
+  };
+
+  const handleRegenerate = async (messageId: string) => {
+    if (isLoading) return;
+    const msgIndex = messages.findIndex((m) => m.id === messageId);
+    if (msgIndex === -1) return;
+
+    const msg = messages[msgIndex];
+    if (msg.role !== "assistant") return;
+
+    let userMsgIndex = -1;
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        userMsgIndex = i;
+        break;
+      }
+    }
+
+    if (userMsgIndex === -1) {
+      message.error("无法重新生成：找不到对应的问题");
+      return;
+    }
+
+    const userMsg = messages[userMsgIndex];
+    const userQuery = userMsg.content;
+    const assistantMsgId = msg.id;
+    const userMsgId = userMsg.id;
+
+    setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId && m.id !== userMsgId));
+
+    if (currentConversationId) {
+      try {
+        await deleteMessage(currentConversationId, parseInt(assistantMsgId));
+        await deleteMessage(currentConversationId, parseInt(userMsgId));
+      } catch (error) {
+        console.error("Failed to delete messages for regeneration:", error);
+      }
+    }
+
+    handleSend(userQuery);
+  };
+
+  const handleSend = async (overrideInput?: string | React.SyntheticEvent) => {
+    const textToSend = typeof overrideInput === "string" ? overrideInput : input;
+    if (!textToSend.trim() || isLoading) return;
+
+    const userMessage = textToSend;
+    if (textToSend === input) setInput("");
+
     const tempId = Date.now().toString();
     setMessages((prev) => [...prev, { id: tempId, role: "user", content: userMessage }]);
     setIsLoading(true);
@@ -244,6 +307,12 @@ function App() {
                 if (data.sources) {
                   return { ...msg, sources: data.sources };
                 }
+                if (data.message_id) {
+                  return { ...msg, id: data.message_id.toString() };
+                }
+              }
+              if (msg.id === tempId && data.user_message_id) {
+                return { ...msg, id: data.user_message_id.toString() };
               }
               return msg;
             }),
@@ -536,6 +605,38 @@ function App() {
                           参考 {msg.sources.length} 篇资料
                           <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-gray-600 transition-colors" />
                         </button>
+                      </div>
+                    )}
+
+                    {msg.role === "assistant" && !isLoading && msg.content && (
+                      <div className="flex items-center gap-4 mt-2 ml-1">
+                        <Tooltip title="复制内容">
+                          <button
+                            onClick={() => handleCopy(msg.content)}
+                            className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            <Copy className="w-4 h-4" />
+                            <span className="text-xs">复制</span>
+                          </button>
+                        </Tooltip>
+                        <Tooltip title="重新生成">
+                          <button
+                            onClick={() => handleRegenerate(msg.id)}
+                            className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            <RotateCw className="w-4 h-4" />
+                            <span className="text-xs">重新生成</span>
+                          </button>
+                        </Tooltip>
+                        <Tooltip title="删除消息">
+                          <button
+                            onClick={() => handleDelete(msg.id)}
+                            className="flex items-center gap-1 text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span className="text-xs">删除</span>
+                          </button>
+                        </Tooltip>
                       </div>
                     )}
                   </div>

@@ -145,6 +145,11 @@ export const deleteConversation = async (id: string) => {
   return response.data;
 };
 
+export const deleteMessage = async (conversationId: string, messageId: number) => {
+  const response = await api.delete(`/conversations/${conversationId}/messages/${messageId}`);
+  return response.data;
+};
+
 export const updateConversationTitle = async (_id: string, _title: string) => {
   // Need to implement backend logic if needed, but for now skipped
   // If backend doesn't support this yet, we might need to add it or skip.
@@ -155,7 +160,13 @@ export const updateConversationTitle = async (_id: string, _title: string) => {
 export const chatStreamWithConversation = async (
   conversationId: string,
   query: string,
-  onChunk: (data: { answer?: string; sources?: string[]; error?: string }) => void,
+  onChunk: (data: {
+    answer?: string;
+    sources?: string[];
+    error?: string;
+    message_id?: number;
+    user_message_id?: number;
+  }) => void,
   onError: (error: any) => void,
   onFinish: () => void,
   signal?: AbortSignal,
