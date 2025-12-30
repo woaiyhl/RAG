@@ -2,72 +2,87 @@
 
 ## 1. 技术架构 (Technical Architecture)
 
-本项目采用前后端分离架构，构建了一个基于 RAG (Retrieval-Augmented Generation) 技术的智能知识库问答系统。
+本项目采用前后端分离架构，构建了一个基于 **混合检索 (Hybrid Search)** 和 **联网搜索增强** 的智能 RAG (Retrieval-Augmented Generation) 问答系统。
 
 ### 1.1 前端技术栈 (Frontend)
 
 - **核心框架**: React 18 + Vite
 - **开发语言**: TypeScript
+- **状态管理**: Zustand
 - **UI 组件库**: Ant Design (主要组件), Lucide React (图标)
 - **样式方案**: Tailwind CSS (原子化 CSS), Framer Motion (动画交互)
 - **网络请求**: Axios
-- **Markdown 渲染**: React Markdown
+- **Markdown 渲染**: React Markdown + Remark Gfm (支持表格、代码块等)
 - **其他特性**:
-  - 语音识别 (Speech-to-Text) 支持
-  - SSE (Server-Sent Events) 流式响应处理
+  - **语音识别**: Web Speech API (Speech-to-Text)
+  - **流式响应**: SSE (Server-Sent Events) 实时打字机效果
+  - **引用高亮**: 自定义组件支持关键词高亮显示
 
 ### 1.2 后端技术栈 (Backend)
 
-- **核心框架**: FastAPI (高性能 Python Web 框架)
+- **核心框架**: FastAPI (高性能异步 Python Web 框架)
 - **WSGI 服务器**: Uvicorn
 - **数据库**:
-  - 关系型数据库: SQLite (存储会话历史、文档元数据)
-  - ORM: SQLAlchemy
+  - **关系型数据库**: SQLite (存储会话历史、文档元数据)
+  - **ORM**: SQLAlchemy
 - **AI & RAG 核心**:
-  - **LangChain**: LLM 应用开发框架
-  - **ChromaDB**: 向量数据库 (本地存储向量索引)
-  - **PyPDF**: PDF 文档解析
-  - **OpenAI API**: 提供 LLM 推理能力
-- **数据处理**:
-  - Python-multipart (文件上传)
-  - Tiktoken (Token 计算)
+  - **LangChain**: LLM 应用开发编排
+  - **向量数据库**: ChromaDB (本地持久化存储)
+  - **混合检索**: `BM25` (关键词检索, 结合 `jieba` 中文分词) + `Vector Search` (语义检索)
+  - **联网搜索**: `DuckDuckGo Search` (用于本地知识库缺失时的兜底)
+  - **LLM**: OpenAI 接口规范 (支持 GPT-3.5/4 或兼容模型)
+- **文档处理**:
+  - **PyPDF**: PDF 解析
+  - **Tiktoken**: Token 计算与文本切分
+- **异步处理**: 全面采用 `async/await` 提升并发性能
 
-### 1.3 数据流向
+### 1.3 数据流向与检索策略
 
-1. **文档上传**: 用户上传 PDF/TXT/MD -> 后端解析文本 -> 文本切块 (Chunking) -> 调用 Embedding 模型生成向量 -> 存入 ChromaDB。
-2. **问答交互**: 用户提问 -> 生成问题向量 -> 在 ChromaDB 中检索相关文档块 -> 组装 Prompt (问题 + 上下文) -> 调用 LLM -> 流式返回答案给前端。
+1.  **文档处理流**:
+    - 用户上传 PDF/TXT/MD -> 后端解析文本 -> 文本切块 (Chunking) -> **双路索引** (同时生成向量索引和 BM25 倒排索引)。
+2.  **智能问答流 (RAG Pipeline)**:
+    - **第 1 步: 混合检索 (Hybrid Search)**
+      - 同时发起向量检索 (Semantic Search) 和 BM25 关键词检索。
+      - 使用 `EnsembleRetriever` 对结果进行加权融合 (Reciprocal Rank Fusion)，提取 Top-K 相关文档。
+    - **第 2 步: 联网搜索兜底 (Web Search Fallback)**
+      - 如果本地检索无结果，或 LLM 判断无法回答，系统自动调用 DuckDuckGo 进行联网搜索。
+    - **第 3 步: 答案生成**
+      - 组装 Prompt (问题 + 上下文/搜索结果) -> 调用 LLM -> 流式返回答案给前端。
 
 ---
 
 ## 2. 后端接口文档 (Backend Interfaces)
 
-后端 API 主要分为三个模块：RAG 核心功能、会话管理、文档管理。
+API 路径统一前缀为 `/api/v1`，主要分为 RAG 核心、会话管理、文档管理三个模块。
 
 ### 2.1 RAG 核心 (RAG Core)
 
-| 方法   | 路径                      | 描述                                                 |
-| :----- | :------------------------ | :--------------------------------------------------- |
-| `POST` | `/api/v1/rag/upload`      | **文档上传**。接收文件，进行解析、切块并存入向量库。 |
-| `POST` | `/api/v1/rag/chat`        | **普通问答**。非流式接口，返回完整答案及引用来源。   |
-| `POST` | `/api/v1/rag/chat/stream` | **流式问答**。SSE 格式流式返回答案。                 |
+| 方法   | 路径               | 描述                                                             |
+| :----- | :----------------- | :--------------------------------------------------------------- |
+| `POST` | `/rag/upload`      | **文档上传**。支持多格式文件，自动完成解析、切分、向量化和存储。 |
+| `POST` | `/rag/chat`        | **普通问答**。非流式接口，返回完整答案及引用来源。               |
+| `POST` | `/rag/chat/stream` | **流式问答**。SSE 格式流式返回答案 (仅用于非会话模式)。          |
 
 ### 2.2 会话管理 (Conversations)
 
-| 方法     | 路径                              | 描述                                       |
-| :------- | :-------------------------------- | :----------------------------------------- |
-| `GET`    | `/api/v1/conversations/`          | **获取会话列表**。支持分页。               |
-| `POST`   | `/api/v1/conversations/`          | **创建新会话**。                           |
-| `GET`    | `/api/v1/conversations/{id}`      | **获取会话详情**。包含历史消息记录。       |
-| `DELETE` | `/api/v1/conversations/{id}`      | **删除会话**。                             |
-| `POST`   | `/api/v1/conversations/{id}/chat` | **会话内聊天**。支持上下文记忆，流式返回。 |
+支持多轮对话和上下文记忆。
+
+| 方法     | 路径                                    | 描述                                                         |
+| :------- | :-------------------------------------- | :----------------------------------------------------------- |
+| `GET`    | `/conversations/`                       | **获取会话列表**。支持分页。                                 |
+| `POST`   | `/conversations/`                       | **创建新会话**。                                             |
+| `GET`    | `/conversations/{id}`                   | **获取会话详情**。包含完整的历史消息记录。                   |
+| `DELETE` | `/conversations/{id}`                   | **删除会话**。                                               |
+| `POST`   | `/conversations/{id}/chat`              | **会话内聊天**。支持上下文记忆，流式返回答案并自动保存历史。 |
+| `DELETE` | `/conversations/{id}/messages/{msg_id}` | **删除单条消息**。                                           |
 
 ### 2.3 文档管理 (Documents)
 
-| 方法     | 路径                             | 描述                                                     |
-| :------- | :------------------------------- | :------------------------------------------------------- |
-| `GET`    | `/api/v1/documents/`             | **获取文档列表**。包含上传时间、状态、文件大小等信息。   |
-| `GET`    | `/api/v1/documents/{id}/preview` | **预览文档**。返回文件流 (PDF/Text)。                    |
-| `DELETE` | `/api/v1/documents/{id}`         | **删除文档**。同时删除数据库记录、本地文件和向量库索引。 |
+| 方法     | 路径                      | 描述                                                     |
+| :------- | :------------------------ | :------------------------------------------------------- |
+| `GET`    | `/documents/`             | **获取文档列表**。包含上传时间、状态、文件大小等元数据。 |
+| `GET`    | `/documents/{id}/preview` | **预览文档**。返回文件流 (PDF/Text)。                    |
+| `DELETE` | `/documents/{id}`         | **删除文档**。级联删除数据库记录、本地文件和向量库索引。 |
 
 ---
 
@@ -75,149 +90,124 @@
 
 ### 3.1 智能问答 (Smart Q&A)
 
-- **上下文理解**: 系统支持多轮对话，能够记住之前的聊天内容。
-- **流式响应**: 类似 ChatGPT 的打字机效果，实时反馈生成内容。
-- **来源引用**: 每次回答都会标注参考了哪些文档片段，保证回答的可信度。
-- **语音输入**: 支持点击麦克风进行语音输入，自动转换为文字 (ASR)。
+- **混合检索增强**: 结合语义理解和精确关键词匹配，显著提升回答准确率。
+- **联网搜索兜底**: 当本地知识库无法回答时，自动联网搜索最新信息，减少“幻觉”和“不知道”。
+- **流式响应**: 实时打字机效果，极速反馈。
+- **引用溯源**:
+  - 答案下方展示引用来源卡片。
+  - 支持 **引用高亮**：点击引用可展开详情，并自动高亮与问题相关的关键词。
+  - 明确标识来源类型（“本地文档”或“Web 搜索”）。
+- **多模态输入**: 支持语音输入 (ASR)，自动转换为文字。
 
-### 3.2 知识库管理 (Knowledge Base Management)
+### 3.2 知识库管理
 
-- **多格式支持**: 支持 PDF 和 TXT 格式文档上传。
-- **文档列表**: 查看已上传文档的状态（处理中/已完成/失败）、大小和上传时间。
-- **文档预览**: 支持在浏览器中直接预览已上传的 PDF 或。文本
-- **文档删除**: 支持删除文档，并自动清理相关的向量数据，保持知识库整洁。
+- **多格式支持**: 支持 PDF, TXT, MD 等格式。
+- **可视化管理**: 实时查看文档处理状态 (Processing/Processed/Error)。
+- **文档预览**: 内置文档预览器，无需下载即可查看原始内容。
+- **智能清理**: 删除文档时自动清理对应的向量数据，保持知识库纯净。
 
-### 3.3 会话历史 (Conversation History)
+### 3.3 会话历史
 
-- **侧边栏导航**: 快速切换不同的历史会话。
-- **新会话创建**: 随时开启新的话题，互不干扰。
-- **历史记录持久化**: 刷新页面后依然保留之前的聊天记录。
-
-### 3.4 用户体验 (UX)
-
-- **响应式设计**: 适配不同屏幕尺寸，侧边栏可折叠。
-- **交互反馈**: 上传、删除、加载均有明确的状态提示 (Toast/Loading)。
-- **Markdown 渲染**: 支持代码块、列表、加粗等富文本格式显示。
+- **持久化存储**: 所有聊天记录存入 SQLite 数据库。
+- **侧边栏导航**: 快速切换历史会话，支持新建和删除会话。
+- **上下文记忆**: 机器人能理解多轮对话中的上下文关系。
 
 ---
 
-## 4. 测试用例 (Test Cases)
+## 4. 数据库设计 (Database Design)
 
-以下为核心功能的建议测试用例：
+系统使用 SQLite，核心表结构如下：
 
-### 4.1 文档上传与处理
+### 4.1 Conversations (会话表)
 
-| ID     | 测试场景       | 前置条件       | 操作步骤                                         | 预期结果                                                                        |
-| :----- | :------------- | :------------- | :----------------------------------------------- | :------------------------------------------------------------------------------ |
-| TC-001 | 上传有效 PDF   | 后端服务正常   | 1. 点击上传按钮<br>2. 选择一个正常的 PDF 文件    | 1. 提示上传成功<br>2. 文档列表中出现该文件<br>3. 状态最终变为"已处理"           |
-| TC-002 | 上传非支持格式 | -              | 1. 点击上传按钮<br>2. 选择一个 .exe 或 .jpg 文件 | 1. 前端拦截或后端报错提示格式不支持                                             |
-| TC-003 | 文档删除       | 存在已上传文档 | 1. 在文档管理列表中点击"删除"<br>2. 确认删除     | 1. 提示删除成功<br>2. 列表不再显示该文档<br>3. 相关的向量检索不再返回该文档内容 |
+| 字段名       | 类型          | 描述     |
+| :----------- | :------------ | :------- |
+| `id`         | String (UUID) | 主键     |
+| `title`      | String        | 会话标题 |
+| `created_at` | DateTime      | 创建时间 |
+| `updated_at` | DateTime      | 更新时间 |
 
-### 4.2 问答功能
+### 4.2 Messages (消息表)
 
-| ID     | 测试场景     | 前置条件                 | 操作步骤                                     | 预期结果                                                 |
-| :----- | :----------- | :----------------------- | :------------------------------------------- | :------------------------------------------------------- |
-| TC-004 | 知识库问答   | 已上传包含特定知识的文档 | 1. 输入关于文档内容的问题<br>2. 点击发送     | 1. 回答准确包含文档中的信息<br>2. 消息下方显示"来源"引用 |
-| TC-005 | 历史记忆测试 | 已进行一轮对话           | 1. 发送"我刚才问了什么？"或指代性问题        | 1. 机器人能正确理解上下文并回答                          |
-| TC-006 | 流式响应中断 | -                        | 1. 发送问题<br>2. 在生成过程中点击"停止"按钮 | 1. 生成立即停止<br>2. 已生成的内容保留在界面上           |
+| 字段名            | 类型        | 描述                                                     |
+| :---------------- | :---------- | :------------------------------------------------------- |
+| `id`              | Integer     | 主键                                                     |
+| `conversation_id` | String      | 外键，关联会话                                           |
+| `role`            | String      | `user` 或 `assistant`                                    |
+| `content`         | Text        | 消息内容                                                 |
+| `sources`         | Text (JSON) | 存储 RAG 检索到的参考源 (包含 content, source, score 等) |
+| `created_at`      | DateTime    | 发送时间                                                 |
 
-### 4.3 界面交互
+### 4.3 Documents (文档表)
 
-| ID     | 测试场景   | 前置条件       | 操作步骤                                          | 预期结果                                         |
-| :----- | :--------- | :------------- | :------------------------------------------------ | :----------------------------------------------- |
-| TC-007 | 侧边栏折叠 | -              | 1. 点击侧边栏折叠按钮                             | 1. 侧边栏收起，聊天区域变宽<br>2. 再次点击可展开 |
-| TC-008 | 语音输入   | 浏览器支持录音 | 1. 点击麦克风图标<br>2. 说话<br>3. 再次点击麦克风 | 1. 说话内容准确转换为文字填充到输入框            |
-
----
-
-## 5. 数据库设计 (Database Design)
-
-系统使用 SQLite 作为关系型数据库，主要包含以下三张表：
-
-### 5.1 Conversations (会话表)
-
-存储用户的对话会话信息。
-| 字段名 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `id` | String (UUID) | 主键，会话唯一标识 |
-| `title` | String | 会话标题（默认为 "New Chat"） |
-| `created_at` | DateTime | 创建时间 |
-| `updated_at` | DateTime | 最后更新时间 |
-
-### 5.2 Messages (消息表)
-
-存储会话中的具体消息记录。
-| 字段名 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `id` | Integer | 主键，自增 |
-| `conversation_id` | String | 外键，关联 Conversations 表 |
-| `role` | String | 消息发送者角色 (`user` 或 `assistant`) |
-| `content` | Text | 消息内容 |
-| `sources` | Text | JSON 字符串，存储 RAG 检索到的参考源 |
-| `created_at` | DateTime | 发送时间 |
-
-### 5.3 Documents (文档表)
-
-存储已上传文档的元数据。
-| 字段名 | 类型 | 描述 |
-| :--- | :--- | :--- |
-| `id` | Integer | 主键，自增 |
-| `filename` | String | 原始文件名 |
-| `file_size` | Integer | 文件大小 (Bytes) |
-| `status` | String | 处理状态 (`processing`, `processed`, `error`) |
-| `upload_time` | DateTime | 上传时间 |
+| 字段名        | 类型     | 描述                               |
+| :------------ | :------- | :--------------------------------- |
+| `id`          | Integer  | 主键                               |
+| `filename`    | String   | 文件名                             |
+| `file_size`   | Integer  | 文件大小                           |
+| `status`      | String   | `processing`, `processed`, `error` |
+| `upload_time` | DateTime | 上传时间                           |
 
 ---
 
-## 6. 项目目录结构 (Project Structure)
+## 5. 项目目录结构 (Project Structure)
 
 ```text
 RAG/
-├── backend/                 # 后端项目 (Python/FastAPI)
+├── backend/                        # 后端项目 (Python/FastAPI)
 │   ├── app/
-│   │   ├── api/             # API 路由定义
-│   │   ├── core/            # 核心配置 (DB, Config)
-│   │   ├── models/          # SQLAlchemy 数据模型
-│   │   ├── schemas/         # Pydantic 数据验证模型
-│   │   └── services/        # 业务逻辑 (RAG, VectorStore, Chat)
-│   ├── data/                # 数据存储 (SQLite, Uploads)
-│   ├── main.py              # 应用入口
-│   └── requirements.txt     # Python 依赖
-├── frontend/                # 前端项目 (React/Vite)
+│   │   ├── api/
+│   │   │   └── endpoints/          # API 路由模块 (chat, docs, rag)
+│   │   ├── core/                   # 核心配置 (Config, DB)
+│   │   ├── models/                 # SQLAlchemy 数据模型
+│   │   ├── schemas/                # Pydantic 数据验证模型
+│   │   └── services/               # 核心业务逻辑
+│   │       ├── rag_engine.py       # RAG 核心引擎 (包含 Fallback 逻辑)
+│   │       ├── vector_store.py     # 向量库管理 (Chroma + BM25)
+│   │       ├── web_search.py       # 联网搜索服务 (DuckDuckGo)
+│   │       └── ...
+│   ├── data/                       # 数据存储 (SQLite, Uploads)
+│   ├── tests/                      # 测试用例
+│   ├── main.py                     # 应用入口
+│   └── requirements.txt            # Python 依赖
+├── frontend/                       # 前端项目 (React/Vite)
 │   ├── src/
-│   │   ├── components/      # UI 组件 (Sidebar, DocumentManager)
-│   │   ├── hooks/           # 自定义 Hooks (useSpeechRecognition)
-│   │   └── services/        # API 请求封装
-│   └── package.json         # Node 依赖
-└── PROJECT_REPORT.md        # 项目报告
+│   │   ├── components/             # UI 组件
+│   │   │   ├── ReferenceSidebar.tsx # 引用展示与高亮组件
+│   │   │   └── ...
+│   │   ├── store/                  # 状态管理 (Zustand)
+│   │   ├── services/               # API 请求封装
+│   │   └── ...
+│   └── package.json
+└── PROJECT_REPORT.md               # 项目报告
 ```
 
 ---
 
-## 7. 部署指南 (Deployment Guide)
+## 6. 部署指南 (Deployment Guide)
 
-### 7.1 后端启动
+### 6.1 后端启动
 
-1. 进入后端目录: `cd backend`
-2. 创建并激活虚拟环境: `python -m venv venv && source venv/bin/activate`
-3. 安装依赖: `pip install -r requirements.txt`
-4. 配置环境变量: 复制 `.env.example` 为 `.env` 并填入 `OPENAI_API_KEY`。
-5. 启动服务: `uvicorn app.main:app --reload` (默认运行在 http://localhost:8000)
+1.  进入后端目录: `cd backend`
+2.  创建虚拟环境: `python -m venv venv && source venv/bin/activate`
+3.  安装依赖: `pip install -r requirements.txt`
+4.  配置环境变量:
+    - 复制 `.env.example` 为 `.env`
+    - 配置 `OPENAI_API_KEY` (必填)
+    - 可选配置代理 `HTTP_PROXY` (如需联网搜索)
+5.  启动服务: `uvicorn app.main:app --reload` (http://localhost:8000)
 
-### 7.2 前端启动
+### 6.2 前端启动
 
-1. 进入前端目录: `cd frontend`
-2. 安装依赖: `npm install`
-3. 启动开发服务器: `npm run dev` (默认运行在 http://localhost:5173)
+1.  进入前端目录: `cd frontend`
+2.  安装依赖: `npm install`
+3.  启动开发服务器: `npm run dev` (http://localhost:5173)
 
 ---
 
-## 8. 未来规划 (Future Roadmap)
+## 7. 未来规划 (Future Roadmap)
 
-为了进一步提升系统的可用性和扩展性，后续计划包括：
-
-- **混合检索优化**: 引入 BM25 关键词检索与向量检索相结合，提高检索准确率。
-- **多模型支持**: 增加对 Ollama, HuggingFace 本地模型的支持，降低使用成本。
-- **用户权限系统**: 增加登录注册功能，实现多用户数据隔离。
-- **文件解析增强**: 支持 Word, Excel, Markdown 等更多格式的文档解析。
-- **Web 搜索增强**: 在知识库无法回答时，自动回退到搜索引擎获取最新信息。
+- **多模型切换**: 支持在界面上动态切换不同的 LLM 模型 (如 Claude, Gemini, Llama)。
+- **知识图谱 (Knowledge Graph)**: 引入知识图谱增强文档间的关联分析。
+- **权限管理**: 增加用户登录与多租户数据隔离。
+- **更多数据源**: 支持 Notion, URL 爬虫等数据导入。
