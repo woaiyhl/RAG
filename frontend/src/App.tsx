@@ -68,7 +68,6 @@ function App() {
   const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
   const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
 
   // Reference Sidebar State
   const [isRefSidebarOpen, setIsRefSidebarOpen] = useState(false);
@@ -182,17 +181,26 @@ function App() {
       await uploadDocument(file);
       setUploadStatus("success");
       setRefreshDocsTrigger((prev) => prev + 1);
-      
-      // Show success message
-      setUploadSuccessMessage(file.name);
-      
-      // Clear status and message after 3 seconds
-      setTimeout(() => {
-        setUploadStatus("idle");
-        setUploadSuccessMessage(null);
-      }, 3000);
+      setTimeout(() => setUploadStatus("idle"), 3000);
 
-      // message.success(`已成功收录文档 "${file.name}"`);
+      // Add success message to chat
+      let targetConversationId = activeId;
+      if (!targetConversationId) {
+        const newConv = await createConversation();
+        targetConversationId = newConv.id;
+        initConversation(targetConversationId);
+        setActiveId(targetConversationId);
+        skipFetchRef.current = true;
+        setRefreshSidebarTrigger((prev) => prev + 1);
+      }
+
+      const successMsgId = Date.now().toString();
+      addMessage(targetConversationId, {
+        id: successMsgId,
+        uid: successMsgId,
+        role: "assistant",
+        content: `### 文档解析成功\n\n已成功收录文档 "${file.name}"。我现在已经学习了其中的内容，您可以随时向我提问。`,
+      });
     } catch (error) {
       console.error(error);
       setUploadStatus("error");
@@ -557,26 +565,6 @@ function App() {
             <div className="text-sm text-gray-400">Based on RAG Technology</div>
           </div>
 
-          {/* Upload Success Banner */}
-          <AnimatePresence>
-            {uploadSuccessMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: -20, x: "-50%" }}
-                animate={{ opacity: 1, y: 0, x: "-50%" }}
-                exit={{ opacity: 0, y: -20, x: "-50%" }}
-                transition={{ duration: 0.3 }}
-                className="absolute top-20 left-1/2 z-50 bg-white pl-3 pr-5 py-3 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 flex items-center gap-3 select-none"
-              >
-                <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-green-500/30">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                </div>
-                <span className="text-gray-700 font-medium text-sm">
-                  已成功收录文档 "{uploadSuccessMessage}"
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8 scroll-smooth">
             {messages.length === 0 && (
@@ -613,7 +601,8 @@ function App() {
                   <div className={`flex flex-col space-y-2 max-w-[85%]`}>
                     <div
                       className={`
-                    rounded-2xl px-6 py-4 shadow-sm
+                    rounded-2xl px-6 shadow-sm
+                    ${msg.content?.includes("### 文档解析成功") ? "py-3" : "py-4"}
                     ${
                       msg.role === "user"
                         ? "bg-gray-900 text-white rounded-br-sm"
@@ -661,37 +650,40 @@ function App() {
                       </div>
                     )}
 
-                    {msg.role === "assistant" && !isLoading && msg.content && (
-                      <div className="flex items-center gap-4 mt-2 ml-1">
-                        <Tooltip title="复制内容">
-                          <button
-                            onClick={() => handleCopy(msg.content)}
-                            className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
-                          >
-                            <Copy className="w-4 h-4" />
-                            <span className="text-xs">复制</span>
-                          </button>
-                        </Tooltip>
-                        <Tooltip title="重新生成">
-                          <button
-                            onClick={() => handleRegenerate(msg.id)}
-                            className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
-                          >
-                            <RotateCw className="w-4 h-4" />
-                            <span className="text-xs">重新生成</span>
-                          </button>
-                        </Tooltip>
-                        <Tooltip title="删除消息">
-                          <button
-                            onClick={() => handleDelete(msg.id)}
-                            className="flex items-center gap-1 text-gray-400 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            <span className="text-xs">删除</span>
-                          </button>
-                        </Tooltip>
-                      </div>
-                    )}
+                    {msg.role === "assistant" &&
+                      !isLoading &&
+                      msg.content &&
+                      !msg.content.includes("### 文档解析成功") && (
+                        <div className="flex items-center gap-4 mt-2 ml-1">
+                          <Tooltip title="复制内容">
+                            <button
+                              onClick={() => handleCopy(msg.content)}
+                              className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                              <Copy className="w-4 h-4" />
+                              <span className="text-xs">复制</span>
+                            </button>
+                          </Tooltip>
+                          <Tooltip title="重新生成">
+                            <button
+                              onClick={() => handleRegenerate(msg.id)}
+                              className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                              <RotateCw className="w-4 h-4" />
+                              <span className="text-xs">重新生成</span>
+                            </button>
+                          </Tooltip>
+                          <Tooltip title="删除消息">
+                            <button
+                              onClick={() => handleDelete(msg.id)}
+                              className="flex items-center gap-1 text-gray-400 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span className="text-xs">删除</span>
+                            </button>
+                          </Tooltip>
+                        </div>
+                      )}
                   </div>
 
                   {msg.role === "user" && (
