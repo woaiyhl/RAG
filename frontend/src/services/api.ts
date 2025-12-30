@@ -145,7 +145,7 @@ export const deleteConversation = async (id: string) => {
   return response.data;
 };
 
-export const updateConversationTitle = async (id: string, title: string) => {
+export const updateConversationTitle = async (_id: string, _title: string) => {
   // Need to implement backend logic if needed, but for now skipped
   // If backend doesn't support this yet, we might need to add it or skip.
   // I added update_conversation_title in service but no endpoint.

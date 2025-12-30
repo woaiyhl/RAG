@@ -62,16 +62,113 @@ class RAGEngine:
             return self.get_answer(query)
 
         retriever = self.vector_store_service.get_retriever(search_type="hybrid", k=4)
+        docs = await retriever.aget_relevant_documents(query)
         
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=self.llm,
-            chain_type="stuff",
-            retriever=retriever,
-            return_source_documents=True
+        is_web_search = False
+        if not docs:
+            print(f"No documents found in vector store for '{query}'. Falling back to Web Search...")
+            try:
+                from app.services.web_search import WebSearchService
+                docs = await WebSearchService.asearch(query)
+                if docs:
+                    is_web_search = True
+            except Exception as e:
+                print(f"Web search failed: {e}")
+        
+        if not docs:
+            # Fallback to General Knowledge with Disclaimer
+            print(f"No documents found. Falling back to General Knowledge for '{query}'...")
+            from langchain_core.prompts import PromptTemplate
+            
+            disclaimer_prompt = """用户问题：{question}
+未检索到专属知识库内容，请基于通用知识回答，并在回答开头和结尾分别添加以下免责声明：
+开头：【免责声明：本回答基于通用知识，非专属知识库内容，仅供参考】
+结尾：【建议你查阅官方文档或联系相关人员获取准确信息】"""
+            
+            PROMPT = PromptTemplate(template=disclaimer_prompt, input_variables=["question"])
+            
+            # Use LLM directly
+            chain = PROMPT | self.llm
+            result_content = await chain.ainvoke({"question": query})
+            
+            result_text = result_content.content if hasattr(result_content, "content") else str(result_content)
+            
+            return {
+                "result": result_text,
+                "source_documents": []
+            }
+            
+        from langchain.chains.question_answering import load_qa_chain
+        from langchain_core.prompts import PromptTemplate
+        
+        template = """你是一个专业的知识库助手。请根据以下提供的参考文档内容回答用户的问题。如果文档中没有相关信息，请诚实地说明无法回答，不要编造信息。
+        
+参考文档：
+{context}
+
+用户问题：{question}
+
+回答："""
+
+        if is_web_search:
+            template = """你是一个智能助手。由于本地知识库缺乏相关信息，以下内容来自网络搜索结果。请根据这些搜索结果回答用户的问题。回答要条理清晰，使用 Markdown 格式，并适当引用来源。
+
+参考搜索结果：
+{context}
+
+用户问题：{question}
+
+回答："""
+
+        PROMPT = PromptTemplate(
+            template=template, input_variables=["context", "question"]
         )
         
-        result = await qa_chain.ainvoke({"query": query})
-        return result
+        chain = load_qa_chain(self.llm, chain_type="stuff", prompt=PROMPT)
+        result = await chain.ainvoke({"input_documents": docs, "question": query})
+        
+        result_text = result["output_text"]
+        
+        # Post-Verification Fallback: If LLM says it can't answer, try Web Search
+        refusal_keywords = ["无法回答", "没有相关信息", "并未包含", "不包含", "无法提供"]
+        is_refusal = any(k in result_text for k in refusal_keywords)
+        
+        if is_refusal and not is_web_search:
+             print(f"LLM indicated insufficient context ('{result_text[:50]}...'). Fallback to Web Search...")
+             try:
+                from app.services.web_search import WebSearchService
+                web_docs = await WebSearchService.asearch(query)
+                
+                if web_docs:
+                    print(f"Web search found {len(web_docs)} results. Re-generating answer...")
+                    
+                    # Update Prompt for Web Search
+                    web_template = """你是一个智能助手。由于本地知识库缺乏相关信息，以下内容来自网络搜索结果。请根据这些搜索结果回答用户的问题。回答要条理清晰，使用 Markdown 格式，并适当引用来源。
+
+参考搜索结果：
+{context}
+
+用户问题：{question}
+
+回答："""
+                    WEB_PROMPT = PromptTemplate(
+                        template=web_template, input_variables=["context", "question"]
+                    )
+                    
+                    chain = load_qa_chain(self.llm, chain_type="stuff", prompt=WEB_PROMPT)
+                    result = await chain.ainvoke({"input_documents": web_docs, "question": query})
+                    
+                    return {
+                        "result": result["output_text"],
+                        "source_documents": web_docs
+                    }
+             except Exception as e:
+                print(f"Web search fallback failed: {e}")
+
+        return {
+            "result": result_text,
+            "source_documents": docs
+        }
 
     async def astream_answer_generator(self, query: str):
         """Generator for streaming answer."""
@@ -108,8 +205,37 @@ class RAGEngine:
             yield {"error": f"Retrieval failed: {str(e)}"}
             return
 
+        # Web Search Fallback Logic
+        is_web_search = False
         if not docs:
-             yield {"answer": "抱歉，没有在知识库中找到相关内容。"}
+            print(f"[{time.time()}] No documents found in vector store. Falling back to Web Search...")
+            try:
+                from app.services.web_search import WebSearchService
+                yield {"answer": "（未在知识库中找到相关内容，正在联网搜索最新信息...）\n\n"}
+                docs = await WebSearchService.asearch(query)
+                if docs:
+                    is_web_search = True
+                    print(f"[{time.time()}] Web search found {len(docs)} results.")
+            except Exception as e:
+                print(f"Web search failed: {e}")
+
+        if not docs:
+             # Fallback to General Knowledge with Disclaimer (Streaming)
+             print(f"[{time.time()}] No documents found. Falling back to General Knowledge...")
+             from langchain_core.messages import HumanMessage
+             
+             disclaimer_prompt = f"""用户问题：{query}
+未检索到专属知识库内容，请基于通用知识回答，并在回答开头和结尾分别添加以下免责声明：
+开头：【免责声明：本回答基于通用知识，非专属知识库内容，仅供参考】
+结尾：【建议你查阅官方文档或联系相关人员获取准确信息】"""
+
+             messages = [HumanMessage(content=disclaimer_prompt)]
+             
+             async for chunk in self.llm.astream(messages):
+                if chunk.content:
+                    yield {"answer": chunk.content}
+             
+             yield {"sources": []}
              return
 
         context = "\n\n".join([doc.page_content for doc in docs])
@@ -118,6 +244,9 @@ class RAGEngine:
         from langchain_core.messages import SystemMessage, HumanMessage
         
         system_prompt = "你是一个专业的知识库助手。请根据以下提供的参考文档内容回答用户的问题。如果文档中没有相关信息，请诚实地说明无法回答，不要编造信息。回答要条理清晰，使用 Markdown 格式。"
+        if is_web_search:
+            system_prompt = "你是一个智能助手。由于本地知识库缺乏相关信息，以下内容来自网络搜索结果。请根据这些搜索结果回答用户的问题。回答要条理清晰，使用 Markdown 格式，并适当引用来源。"
+            
         user_prompt = f"参考文档：\n{context}\n\n用户问题：{query}"
         
         messages = [
@@ -129,6 +258,7 @@ class RAGEngine:
         print(f"[{time.time()}] Starting LLM generation...")
         llm_start_time = time.time()
         first_token_received = False
+        full_response = ""
         
         async for chunk in self.llm.astream(messages):
             if not first_token_received:
@@ -136,8 +266,51 @@ class RAGEngine:
                 print(f"[{time.time()}] First token received. Time to first token: {time.time() - llm_start_time:.2f}s")
             
             if chunk.content:
+                full_response += chunk.content
                 yield {"answer": chunk.content}
         
         print(f"[{time.time()}] LLM generation complete. Total time: {time.time() - start_time:.2f}s")
+
+        # Secondary Fallback: Check for Refusal in Streaming Response
+        refusal_keywords = ["无法回答", "没有相关信息", "并未包含", "不包含", "无法提供", "抱歉", "sorry"]
+        is_refusal = any(k in full_response for k in refusal_keywords)
+        
+        if is_refusal and not is_web_search:
+             print(f"[{time.time()}] LLM indicated refusal in stream. Triggering Web Search Fallback...")
+             try:
+                yield {"answer": "\n\n（检测到本地知识库无法回答，正在尝试联网搜索...）\n\n"}
+                from app.services.web_search import WebSearchService
+                web_docs = await WebSearchService.asearch(query)
                 
-        # Sources already sent at the beginning
+                if web_docs:
+                    print(f"[{time.time()}] Web search found {len(web_docs)} results. Re-generating answer...")
+                    docs = web_docs # Update docs for sources
+                    
+                    web_template = "你是一个智能助手。由于本地知识库缺乏相关信息，以下内容来自网络搜索结果。请根据这些搜索结果回答用户的问题。回答要条理清晰，使用 Markdown 格式，并适当引用来源。"
+                    web_context = "\n\n".join([doc.page_content for doc in web_docs])
+                    web_user_prompt = f"参考搜索结果：\n{web_context}\n\n用户问题：{query}"
+                    
+                    web_messages = [
+                        SystemMessage(content=web_template),
+                        HumanMessage(content=web_user_prompt)
+                    ]
+                    
+                    async for chunk in self.llm.astream(web_messages):
+                        if chunk.content:
+                            yield {"answer": chunk.content}
+                            
+             except Exception as e:
+                print(f"Web search fallback failed during streaming: {e}")
+                
+        # Send sources at the end
+        sources_list = []
+        for doc in docs:
+            if doc.metadata.get("type") == "web_search":
+                # For Web Search, provide Title and URL
+                source_str = f"【Web搜索】{doc.metadata.get('title', '无标题')}\n链接: {doc.metadata.get('source', '无链接')}\n摘要: {doc.page_content[:100]}..."
+                sources_list.append(source_str)
+            else:
+                # For local documents, provide content snippet
+                sources_list.append(doc.page_content[:200] + "...")
+                
+        yield {"sources": sources_list}

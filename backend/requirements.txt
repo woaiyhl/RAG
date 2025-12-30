@@ -10,3 +10,4 @@ python-multipart
 tiktoken
 rank_bm25
 jieba
+duckduckgo-search

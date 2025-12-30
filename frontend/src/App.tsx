@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   uploadDocument,
-  chatStream,
   createConversation,
   getConversation,
   chatStreamWithConversation,
@@ -13,7 +12,6 @@ import remarkGfm from "remark-gfm";
 import {
   Send,
   Upload,
-  FileText,
   Loader2,
   Bot,
   User,

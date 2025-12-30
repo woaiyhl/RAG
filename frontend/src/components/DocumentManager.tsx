@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Table, Button, Tag, Popconfirm, message, Space, Tooltip } from "antd";
 import {
-  DeleteOutlined,
   FileTextOutlined,
   ReloadOutlined,
   EyeOutlined,
