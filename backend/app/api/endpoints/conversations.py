@@ -91,6 +91,7 @@ async def chat_stream(
     async def generate():
         full_answer = ""
         sources = []
+        is_saved = False
         
         try:
             async for chunk in rag_engine.astream_answer_generator(request.query):
@@ -111,6 +112,7 @@ async def chat_stream(
                     sources=json.dumps(sources) if sources else None
                 )
                 saved_msg = service.add_message(session, conversation_id, assistant_msg)
+                is_saved = True
                 
                 # Send final IDs
                 yield f"data: {json.dumps({'message_id': saved_msg.id, 'user_message_id': user_msg_id})}\n\n"
@@ -118,6 +120,21 @@ async def chat_stream(
         except Exception as e:
             logger.error(f"Error in chat stream: {str(e)}", exc_info=True)
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            # If not saved (e.g. aborted or error) and we have some content, save it
+            if not is_saved and full_answer:
+                try:
+                    logger.info("Saving partial message due to stream interruption")
+                    with SessionLocal() as session:
+                        service = ConversationService()
+                        assistant_msg = MessageCreate(
+                            role="assistant", 
+                            content=full_answer,
+                            sources=json.dumps(sources) if sources else None
+                        )
+                        service.add_message(session, conversation_id, assistant_msg)
+                except Exception as save_error:
+                    logger.error(f"Failed to save partial message: {str(save_error)}")
 
     return StreamingResponse(
             generate(), 

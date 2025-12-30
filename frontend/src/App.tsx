@@ -68,6 +68,7 @@ function App() {
   const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
   const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
 
   // Reference Sidebar State
   const [isRefSidebarOpen, setIsRefSidebarOpen] = useState(false);
@@ -181,9 +182,17 @@ function App() {
       await uploadDocument(file);
       setUploadStatus("success");
       setRefreshDocsTrigger((prev) => prev + 1);
-      setTimeout(() => setUploadStatus("idle"), 3000);
+      
+      // Show success message
+      setUploadSuccessMessage(file.name);
+      
+      // Clear status and message after 3 seconds
+      setTimeout(() => {
+        setUploadStatus("idle");
+        setUploadSuccessMessage(null);
+      }, 3000);
 
-      message.success(`已成功收录文档 "${file.name}"`);
+      // message.success(`已成功收录文档 "${file.name}"`);
     } catch (error) {
       console.error(error);
       setUploadStatus("error");
@@ -547,6 +556,26 @@ function App() {
             </div>
             <div className="text-sm text-gray-400">Based on RAG Technology</div>
           </div>
+
+          {/* Upload Success Banner */}
+          <AnimatePresence>
+            {uploadSuccessMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -20, x: "-50%" }}
+                animate={{ opacity: 1, y: 0, x: "-50%" }}
+                exit={{ opacity: 0, y: -20, x: "-50%" }}
+                transition={{ duration: 0.3 }}
+                className="absolute top-20 left-1/2 z-50 bg-white pl-3 pr-5 py-3 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 flex items-center gap-3 select-none"
+              >
+                <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-green-500/30">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                </div>
+                <span className="text-gray-700 font-medium text-sm">
+                  已成功收录文档 "{uploadSuccessMessage}"
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8 scroll-smooth">
