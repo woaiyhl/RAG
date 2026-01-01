@@ -37,6 +37,7 @@ import { ConfigProvider, Tooltip, message } from "antd";
 import { useChatStore } from "./store/useChatStore";
 import { useSpeechRecognition } from "./hooks/useSpeechRecognition";
 import { ReferenceSidebar } from "./components/ReferenceSidebar";
+import { VoiceWave } from "./components/VoiceWave";
 
 // interface Message removed as it is imported from store
 
@@ -122,7 +123,10 @@ function App() {
   };
 
   // 语音输入相关逻辑
-  const [initialInput, setInitialInput] = useState("");
+  const initialInputRef = useRef("");
+  // 增加 currentTranscript 状态，用于实时显示语音内容
+  const [currentTranscript, setCurrentTranscript] = useState("");
+
   const {
     isListening,
     isSupported,
@@ -131,7 +135,11 @@ function App() {
     error: speechError,
   } = useSpeechRecognition({
     onResult: (transcript) => {
-      setInput(initialInput + transcript);
+      setCurrentTranscript(transcript);
+      setInput(initialInputRef.current + transcript);
+    },
+    onEnd: () => {
+      setCurrentTranscript("");
     },
   });
 
@@ -139,7 +147,7 @@ function App() {
     if (isListening) {
       stopListening();
     } else {
-      setInitialInput(input);
+      initialInputRef.current = input;
       startListening();
     }
   };
@@ -701,25 +709,47 @@ function App() {
           {/* Input Area */}
           <div className="p-6 bg-white border-t border-gray-100">
             <div className="max-w-4xl mx-auto relative">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                placeholder="输入你的问题，例如：RAG 的核心优势是什么？"
-                className="w-full pl-6 pr-32 py-4 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all shadow-sm text-gray-700 placeholder-gray-400"
-                disabled={isLoading}
-              />
+              {isListening ? (
+                <div className="w-full pl-6 pr-32 py-4 bg-white border-2 border-primary-500/50 rounded-full flex items-center shadow-lg shadow-primary-500/10 h-[58px] transition-all duration-300 overflow-hidden">
+                  <VoiceWave />
+                  <span className="ml-3 text-gray-500 truncate text-sm flex-1">
+                    {currentTranscript || "我在听，请继续 ..."}
+                  </span>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+                  placeholder="输入你的问题，例如：RAG 的核心优势是什么？"
+                  className="w-full pl-6 pr-32 py-4 bg-gray-50 border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all shadow-sm text-gray-700 placeholder-gray-400"
+                  disabled={isLoading}
+                />
+              )}
               <div className="absolute right-2 top-2 bottom-2 flex items-center gap-2">
                 {isSupported && (
-                  <Tooltip title={speechError || (isListening ? "点击停止录音" : "点击开始录音")}>
+                  <Tooltip
+                    title={
+                      speechError ? (
+                        <span className="text-red-500 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          {speechError}
+                        </span>
+                      ) : isListening ? (
+                        "点击停止录音"
+                      ) : (
+                        "点击开始录音"
+                      )
+                    }
+                  >
                     <button
                       onClick={handleMicClick}
                       className={`h-full aspect-square rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95 ${
                         isListening
                           ? "bg-red-500 text-white animate-pulse ring-4 ring-red-200"
                           : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-                      } ${speechError ? "border-red-500 border" : ""}`}
+                      } ${speechError ? "border-red-500 border bg-red-50" : ""}`}
                     >
                       {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                     </button>
