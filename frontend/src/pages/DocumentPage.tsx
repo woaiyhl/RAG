@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Table, Button, Tag, Popconfirm, message, Space, Tooltip } from "antd";
+import { Table, Button, Tag, Popconfirm, message, Space, Tooltip, Modal } from "antd";
 import {
   FileTextOutlined,
   ReloadOutlined,
@@ -7,23 +7,23 @@ import {
   FullscreenExitOutlined,
   CloseOutlined,
 } from "@ant-design/icons";
-import { Trash2, Eye } from "lucide-react";
+import { Trash2, Eye, PanelLeftOpen, FileText } from "lucide-react";
 import type { ColumnsType } from "antd/es/table";
 import { getDocuments, deleteDocument, Document } from "../services/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useOutletContext } from "react-router-dom";
 
-interface DocumentManagerProps {
-  open: boolean;
-  onClose: () => void;
-  refreshTrigger: number; // 外部触发刷新（例如上传成功后）
+interface DocumentPageContext {
+  isSidebarOpen: boolean;
+  setIsSidebarOpen: (isOpen: boolean) => void;
+  refreshDocsTrigger: number;
 }
 
-export const DocumentManager: React.FC<DocumentManagerProps> = ({
-  open,
-  onClose,
-  refreshTrigger,
-}) => {
+export const DocumentPage: React.FC = () => {
+  const { isSidebarOpen, setIsSidebarOpen, refreshDocsTrigger } =
+    useOutletContext<DocumentPageContext>();
+
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
@@ -47,10 +47,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   };
 
   useEffect(() => {
-    if (open) {
-      fetchDocuments();
-    }
-  }, [open, refreshTrigger]);
+    fetchDocuments();
+  }, [refreshDocsTrigger]);
 
   const handleDelete = async (id: number) => {
     setDeleteLoading(id);
@@ -209,42 +207,45 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   ];
 
   return (
-    <>
-      <Modal
-        title={
-          <div className="flex items-center gap-2">
-            <span>文档管理</span>
-            <Tag color="blue">{documents.length} 篇</Tag>
-          </div>
-        }
-        open={open}
-        onCancel={onClose}
-        footer={[
-          <Button
-            key="refresh"
-            icon={<ReloadOutlined />}
-            onClick={fetchDocuments}
-            loading={loading}
-          >
+    <div className="flex-1 flex flex-col relative bg-white h-full overflow-hidden">
+      {/* Header */}
+      <div className="h-16 border-b border-gray-100 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <div className="flex items-center gap-4">
+          {!isSidebarOpen && (
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="text-gray-500 hover:text-primary-600 transition-colors p-1.5 rounded-md hover:bg-gray-100"
+              title="展开侧边栏"
+            >
+              <PanelLeftOpen className="w-5 h-5" />
+            </button>
+          )}
+          <h2 className="text-gray-700 font-semibold flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary-500" />
+            文档管理
+          </h2>
+          <Tag color="blue">{documents.length} 篇</Tag>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button icon={<ReloadOutlined />} onClick={fetchDocuments} loading={loading}>
             刷新
-          </Button>,
-          <Button key="close" type="primary" onClick={onClose}>
-            关闭
-          </Button>,
-        ]}
-        width={800}
-        className="document-manager-modal"
-      >
+          </Button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-8">
         <Table
           columns={columns}
           dataSource={documents}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 5 }}
+          pagination={{ pageSize: 10 }}
           size="middle"
         />
-      </Modal>
+      </div>
 
+      {/* Preview Modal */}
       <Modal
         open={!!previewUrl || !!mdContent || loadingPreview}
         closable={false}
@@ -286,7 +287,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         styles={{ body: { height: isFullscreen ? "calc(100vh - 55px)" : "80vh", padding: 0 } }}
         destroyOnHidden
         centered={!isFullscreen}
-        zIndex={1001} // Ensure it's above the document manager modal
+        zIndex={1001}
       >
         {loadingPreview ? (
           <div className="flex justify-center items-center h-full">
@@ -308,6 +309,6 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
           )
         )}
       </Modal>
-    </>
+    </div>
   );
 };
