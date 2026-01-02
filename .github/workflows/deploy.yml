@@ -1,0 +1,43 @@
+name: Deploy to Aliyun
+
+on:
+  push:
+    # 监听所有分支的推送，或者您可以指定特定分支
+    branches: 
+      - main
+      - master
+      - 'dev'
+      - 'feature/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Copy files via SCP
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: "/root/rag-project"
+          rm: false
+          strip_components: 0
+          exclude: "node_modules,backend/venv,.git,backend/data"
+
+      - name: Execute remote deployment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /root/rag-project
+            chmod +x deploy.sh
+            # 强制重新构建，确保新分支代码生效
+            ./deploy.sh
