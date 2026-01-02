@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rag-backend
+    volumes:
+      # Persist SQLite database and ChromaDB vector store
+      # Mapping local backend/data to container /app/data
+      - ./backend/data:/app/data
+    env_file:
+      - ./backend/.env
+    restart: always
+    # No ports exposed to host, only internal network for Nginx
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag-web
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+
+networks:
+  default:
+    name: rag-network
