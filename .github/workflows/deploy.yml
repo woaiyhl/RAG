@@ -21,8 +21,8 @@ jobs:
       - name: Copy files via SCP
         uses: appleboy/scp-action@master
         with:
-          host: ${{ secrets.REMOTE_HOST }}
-          username: ${{ secrets.REMOTE_USER }}
+          host: "47.96.23.187"
+          username: "root"
           password: ${{ secrets.REMOTE_PASSWORD }}
           source: "."
           target: "/root/rag-project"
@@ -37,8 +37,8 @@ jobs:
       - name: Execute remote deployment
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.REMOTE_HOST }}
-          username: ${{ secrets.REMOTE_USER }}
+          host: "47.96.23.187"
+          username: "root"
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
             cd /root/rag-project
