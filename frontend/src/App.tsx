@@ -426,7 +426,7 @@ function App() {
                   <Bot className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold tracking-tight">RAG Knowledge</h1>
+                  <h1 className="text-xl font-bold tracking-tight">RAG Knowledges</h1>
                   <p className="text-xs text-gray-400 font-medium">智能知识库问答系统</p>
                 </div>
               </div>
