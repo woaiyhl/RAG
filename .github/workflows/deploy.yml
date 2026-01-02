@@ -3,11 +3,11 @@ name: Deploy to Aliyun
 on:
   push:
     # 监听所有分支的推送，或者您可以指定特定分支
-    branches: 
+    branches:
       - main
       - master
-      - 'dev'
-      - 'feature/**'
+      - "dev"
+      - "feature/**"
   workflow_dispatch:
 
 jobs:
@@ -28,7 +28,11 @@ jobs:
           target: "/root/rag-project"
           rm: false
           strip_components: 0
-          exclude: "node_modules,backend/venv,.git,backend/data"
+          # exclude 参数在 appleboy/scp-action 中不存在，改用 rm 排除或 tar 命令（这里暂时移除 exclude 以修复报错）
+          # scp-action 默认会传输所有文件，如果需要排除，可以使用 tar 排除后再传输，或者忽略此问题
+          # 或者改用 rsync action，但 scp-action 更简单。
+          # 实际上 scp-action 的 exclude 参数已被废弃或不支持，我们直接移除它。
+          # 如果不想传 node_modules，可以在 checkout 步骤后删除它们（如果存在）
 
       - name: Execute remote deployment
         uses: appleboy/ssh-action@master
