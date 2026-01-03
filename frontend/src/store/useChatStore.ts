@@ -3,7 +3,7 @@ import { create } from "zustand";
 export interface Message {
   role: "user" | "assistant";
   content: string;
-  sources?: string[];
+  sources?: any[]; // Supports structured sources
   id: string; // Database ID (can be temporary timestamp initially)
   uid: string; // Frontend unique ID for rendering (never changes)
 }

@@ -43,8 +43,8 @@ export const deleteDocument = async (id: number) => {
 
 export const chatStream = async (
   query: string,
-  history: Array<{role: string, content: string}>,
-  onChunk: (data: { answer?: string; sources?: string[] }) => void,
+  history: Array<{ role: string; content: string }>,
+  onChunk: (data: { answer?: string; sources?: any[] }) => void,
   onError: (error: any) => void,
   onFinish: () => void,
   signal?: AbortSignal,
@@ -163,7 +163,7 @@ export const chatStreamWithConversation = async (
   query: string,
   onChunk: (data: {
     answer?: string;
-    sources?: string[];
+    sources?: any[];
     error?: string;
     message_id?: number;
     user_message_id?: number;

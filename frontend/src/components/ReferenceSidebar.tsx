@@ -7,8 +7,9 @@ import { X, ExternalLink, FileText, Globe, ChevronDown, ChevronUp } from "lucide
 interface ReferenceSidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  sources: string[];
+  sources: any[];
   query?: string;
+  onViewDocument?: (fileId: string, textToHighlight?: string) => void;
 }
 
 const HighlightText: React.FC<{ text: string; query?: string }> = ({ text, query }) => {
@@ -67,9 +68,23 @@ interface ParsedSource {
   siteName?: string;
   content: string;
   relevanceScore?: number;
+  fileId?: string;
 }
 
-const parseSource = (source: string): ParsedSource => {
+const parseSource = (source: any): ParsedSource => {
+  if (typeof source === "object" && source !== null && !Array.isArray(source)) {
+    return {
+      type: source.type || "file",
+      title: source.title || "未知文档",
+      url: source.url,
+      content: source.content || "",
+      fileId: source.metadata?.file_id,
+    };
+  }
+
+  // Legacy string handling
+  if (typeof source !== "string") return { type: "file", title: "未知来源", content: "" };
+
   // 尝试匹配 Web 搜索格式
   // 格式: 【Web搜索】标题\n链接: url\n摘要: content
   const webMatch = source.match(/^【Web搜索】(.*?)\n链接: (.*?)\n摘要: (.*)/s);
@@ -106,6 +121,7 @@ export const ReferenceSidebar: React.FC<ReferenceSidebarProps> = ({
   onClose,
   sources,
   query,
+  onViewDocument,
 }) => {
   const [expandedIndices, setExpandedIndices] = useState<number[]>([]);
   const [showLowRelevance, setShowLowRelevance] = useState(false);
@@ -303,6 +319,25 @@ export const ReferenceSidebar: React.FC<ReferenceSidebarProps> = ({
             >
               访问链接 <ExternalLink className="w-3 h-3" />
             </a>
+          </div>
+        )}
+
+        {source.type === "file" && source.fileId && (
+          <div className="flex items-center justify-between pt-3 border-t border-gray-50 mt-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400 font-medium">本地文档</span>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onViewDocument && source.fileId) {
+                  onViewDocument(source.fileId, source.content);
+                }
+              }}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium group-hover:underline"
+            >
+              查看原文 <FileText className="w-3 h-3" />
+            </button>
           </div>
         )}
       </div>

@@ -17,12 +17,14 @@ interface DocumentManagerProps {
   open: boolean;
   onClose: () => void;
   refreshTrigger: number; // 外部触发刷新（例如上传成功后）
+  initialPreview?: { fileId: string; highlight?: string } | null;
 }
 
 export const DocumentManager: React.FC<DocumentManagerProps> = ({
   open,
   onClose,
   refreshTrigger,
+  initialPreview,
 }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,6 +34,20 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mdContent, setMdContent] = useState<string | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [highlightText, setHighlightText] = useState<string | null>(null);
+
+  // Auto-open preview when documents are loaded and initialPreview is present
+  useEffect(() => {
+    if (open && documents.length > 0 && initialPreview) {
+      const doc = documents.find((d) => d.id.toString() === initialPreview.fileId);
+      if (doc) {
+        handlePreview(doc);
+        if (initialPreview.highlight) {
+          setHighlightText(initialPreview.highlight);
+        }
+      }
+    }
+  }, [documents, initialPreview, open]);
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -295,7 +311,40 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         ) : mdContent ? (
           <div className="p-8 overflow-y-auto h-full bg-white">
             <article className="prose prose-slate max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{mdContent}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => {
+                    // Simple highlighter for paragraph text
+                    // This is naive but works for exact matches of chunks
+                    if (
+                      highlightText &&
+                      typeof children === "string" &&
+                      children.includes(highlightText)
+                    ) {
+                      // Split and highlight
+                      const parts = children.split(highlightText);
+                      return (
+                        <p>
+                          {parts.map((part, i) => (
+                            <React.Fragment key={i}>
+                              {part}
+                              {i < parts.length - 1 && (
+                                <mark className="bg-yellow-200 text-gray-900 rounded-sm px-0.5">
+                                  {highlightText}
+                                </mark>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </p>
+                      );
+                    }
+                    return <p>{children}</p>;
+                  },
+                }}
+              >
+                {mdContent}
+              </ReactMarkdown>
             </article>
           </div>
         ) : (

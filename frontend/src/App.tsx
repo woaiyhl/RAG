@@ -65,6 +65,12 @@ function App() {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
   const [refreshDocsTrigger, setRefreshDocsTrigger] = useState(0);
   const [isDocManagerOpen, setIsDocManagerOpen] = useState(false);
+  const [docPreview, setDocPreview] = useState<{ fileId: string; highlight?: string } | null>(null);
+
+  const handleViewDocument = (fileId: string, textToHighlight?: string) => {
+    setDocPreview({ fileId, highlight: textToHighlight });
+    setIsDocManagerOpen(true);
+  };
   // currentConversationId replaced by activeId from store
   const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
   const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(true);
@@ -540,8 +546,12 @@ function App() {
 
         <DocumentManager
           open={isDocManagerOpen}
-          onClose={() => setIsDocManagerOpen(false)}
+          onClose={() => {
+            setIsDocManagerOpen(false);
+            setDocPreview(null);
+          }}
           refreshTrigger={refreshDocsTrigger}
+          initialPreview={docPreview}
         />
 
         <ReferenceSidebar
@@ -549,6 +559,7 @@ function App() {
           onClose={() => setIsRefSidebarOpen(false)}
           sources={activeReferences}
           query={activeQuery}
+          onViewDocument={handleViewDocument}
         />
 
         {/* Main Chat Area */}
