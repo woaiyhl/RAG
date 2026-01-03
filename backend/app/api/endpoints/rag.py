@@ -21,6 +21,7 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     query: str
+    history: List[dict] = []
 
 class ChatResponse(BaseModel):
     answer: str
@@ -131,7 +132,7 @@ async def chat_stream(request: ChatRequest):
         rag_engine = RAGEngine()
         
         async def generate():
-            async for chunk in rag_engine.astream_answer_generator(request.query):
+            async for chunk in rag_engine.astream_answer_generator(request.query, chat_history=request.history):
                 # Ensure we send valid JSON in SSE format
                 yield f"data: {json.dumps(chunk)}\n\n"
         

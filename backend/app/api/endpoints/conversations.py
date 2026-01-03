@@ -85,7 +85,20 @@ async def chat_stream(
     db_user_msg = conversation_service.add_message(db, conversation_id, user_msg)
     user_msg_id = db_user_msg.id
 
-    # 3. Stream Response
+    # 3. Get Chat History for RAG context
+    # Fetch all previous messages (excluding the one we just added)
+    db_messages = conversation_service.get_messages(db, conversation_id)
+    # Convert to list of dicts
+    chat_history = []
+    # We want messages BEFORE the current query.
+    # Since we just added the user message, it should be the last one (or close to last).
+    # We can just iterate and exclude the current one by ID, or just take all except the last one.
+    # Assuming get_messages returns ordered list.
+    for msg in db_messages:
+        if msg.id != user_msg_id:
+            chat_history.append({"role": msg.role, "content": msg.content})
+
+    # 4. Stream Response
     rag_engine = RAGEngine()
     
     async def generate():
@@ -94,7 +107,7 @@ async def chat_stream(
         is_saved = False
         
         try:
-            async for chunk in rag_engine.astream_answer_generator(request.query):
+            async for chunk in rag_engine.astream_answer_generator(request.query, chat_history=chat_history):
                 # Accumulate answer
                 if "answer" in chunk:
                     full_answer += chunk["answer"]

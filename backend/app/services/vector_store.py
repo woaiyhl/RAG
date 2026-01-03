@@ -8,6 +8,9 @@ from typing import List
 from langchain_core.documents import Document
 import jieba
 
+# Global cache for BM25 retriever to avoid rebuilding it on every request
+_bm25_retriever_cache = None
+
 def chinese_tokenizer(text):
     return list(jieba.cut(text))
 
@@ -35,6 +38,11 @@ class VectorStoreService:
         if not documents:
             return
             
+        # Invalidate BM25 cache when new documents are added
+        global _bm25_retriever_cache
+        _bm25_retriever_cache = None
+        print("Invalidated BM25 cache due to new documents.")
+
         # Process documents in batches to avoid payload size limits
         total_docs = len(documents)
         for i in range(0, total_docs, batch_size):
@@ -50,8 +58,11 @@ class VectorStoreService:
         # We assume that when adding documents, we add metadata={"file_id": str(db_doc.id)}
         try:
             self.vector_db._collection.delete(where={"file_id": file_id})
-            # self.vector_db.persist() # Deprecated in Chroma 0.4.x
-            print(f"Deleted vectors for file_id: {file_id}")
+            
+            # Invalidate BM25 cache when documents are deleted
+            global _bm25_retriever_cache
+            _bm25_retriever_cache = None
+            print(f"Deleted vectors for file_id: {file_id} and invalidated BM25 cache.")
         except Exception as e:
             print(f"Error deleting vectors for file_id {file_id}: {str(e)}")
 
@@ -68,31 +79,39 @@ class VectorStoreService:
         )
         
         if search_type == "hybrid":
+            global _bm25_retriever_cache
+            
             try:
-                # Get all documents from Chroma to build BM25 index
-                # Note: This might be slow for large datasets
-                collection_data = self.vector_db.get()
-                texts = collection_data['documents']
-                metadatas = collection_data['metadatas']
-                
-                if not texts:
-                    print("Warning: No documents found in vector store for hybrid search fallback.")
-                    return chroma_retriever
+                # Use cached BM25 retriever if available
+                if _bm25_retriever_cache is None:
+                    print("Building BM25 index...")
+                    # Get all documents from Chroma to build BM25 index
+                    # Note: This might be slow for large datasets
+                    collection_data = self.vector_db.get()
+                    texts = collection_data['documents']
+                    metadatas = collection_data['metadatas']
+                    
+                    if not texts:
+                        print("Warning: No documents found in vector store for hybrid search fallback.")
+                        return chroma_retriever
 
-                # Reconstruct Document objects
-                docs = []
-                for i in range(len(texts)):
-                    meta = metadatas[i] if metadatas and i < len(metadatas) else {}
-                    # Ensure metadata is a dict
-                    if meta is None:
-                        meta = {}
-                    docs.append(Document(page_content=texts[i], metadata=meta))
+                    # Reconstruct Document objects
+                    docs = []
+                    for i in range(len(texts)):
+                        meta = metadatas[i] if metadatas and i < len(metadatas) else {}
+                        # Ensure metadata is a dict
+                        if meta is None:
+                            meta = {}
+                        docs.append(Document(page_content=texts[i], metadata=meta))
+                    
+                    # Build BM25 Retriever
+                    _bm25_retriever_cache = BM25Retriever.from_documents(
+                        docs, 
+                        preprocess_func=chinese_tokenizer
+                    )
                 
-                # Build BM25 Retriever
-                bm25_retriever = BM25Retriever.from_documents(
-                    docs, 
-                    preprocess_func=chinese_tokenizer
-                )
+                # Use the cached retriever
+                bm25_retriever = _bm25_retriever_cache
                 bm25_retriever.k = k
                 
                 # Create Ensemble Retriever
@@ -100,9 +119,10 @@ class VectorStoreService:
                     retrievers=[bm25_retriever, chroma_retriever],
                     weights=[0.5, 0.5]
                 )
+                
                 return ensemble_retriever
             except Exception as e:
-                print(f"Error initializing hybrid retriever: {e}. Falling back to similarity search.")
+                print(f"Hybrid search setup failed: {e}. Falling back to similarity search.")
                 return chroma_retriever
-                
+        
         return chroma_retriever

@@ -170,8 +170,11 @@ class RAGEngine:
             "source_documents": docs
         }
 
-    async def astream_answer_generator(self, query: str):
+    async def astream_answer_generator(self, query: str, chat_history: list = None):
         """Generator for streaming answer."""
+        if chat_history is None:
+            chat_history = []
+            
         if settings.USE_MOCK_RAG:
             # Simulate streaming in Mock mode
             result = self.get_answer(query)
@@ -190,15 +193,37 @@ class RAGEngine:
 
         # Real RAG Streaming
         import time
+        from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+
         start_time = time.time()
         print(f"[{start_time}] Starting RAG pipeline for query: {query}")
         
-        # 使用混合检索
+        # 1. Query Rewriting (if history exists)
+        search_query = query
+        if chat_history:
+            print(f"[{time.time()}] rewriting query based on history...")
+            rewrite_prompt = "请根据以下对话历史，将用户的最新问题改写为一个独立的、语义完整的搜索查询。不要回答问题，只需输出改写后的查询。如果无需改写，直接输出原问题。\n\n对话历史：\n"
+            for msg in chat_history[-6:]: # Limit history context
+                role = "用户" if msg.get("role") == "user" else "助手"
+                content = msg.get("content", "")
+                rewrite_prompt += f"{role}: {content}\n"
+            
+            rewrite_prompt += f"用户最新问题: {query}\n\n独立查询:"
+            
+            try:
+                rewrite_msg = [HumanMessage(content=rewrite_prompt)]
+                rewrite_response = await self.llm.ainvoke(rewrite_msg)
+                search_query = rewrite_response.content.strip()
+                print(f"[{time.time()}] Query rewritten: '{query}' -> '{search_query}'")
+            except Exception as e:
+                print(f"Query rewriting failed: {e}. Using original query.")
+        
+        # 2. Retrieval using search_query
         retriever = self.vector_store_service.get_retriever(search_type="hybrid", k=4)
         
         try:
-            print(f"[{time.time()}] Starting retrieval...")
-            docs = await retriever.aget_relevant_documents(query)
+            print(f"[{time.time()}] Starting retrieval for '{search_query}'...")
+            docs = await retriever.aget_relevant_documents(search_query)
             print(f"[{time.time()}] Retrieval complete. Found {len(docs)} docs. Time taken: {time.time() - start_time:.2f}s")
         except Exception as e:
             print(f"[{time.time()}] Retrieval failed: {e}")
@@ -212,7 +237,7 @@ class RAGEngine:
             try:
                 from app.services.web_search import WebSearchService
                 yield {"answer": "（未在知识库中找到相关内容，正在联网搜索最新信息...）\n\n"}
-                docs = await WebSearchService.asearch(query)
+                docs = await WebSearchService.asearch(search_query)
                 if docs:
                     is_web_search = True
                     print(f"[{time.time()}] Web search found {len(docs)} results.")
@@ -222,14 +247,23 @@ class RAGEngine:
         if not docs:
              # Fallback to General Knowledge with Disclaimer (Streaming)
              print(f"[{time.time()}] No documents found. Falling back to General Knowledge...")
-             from langchain_core.messages import HumanMessage
              
              disclaimer_prompt = f"""用户问题：{query}
 未检索到专属知识库内容，请基于通用知识回答，并在回答开头和结尾分别添加以下免责声明：
 开头：【免责声明：本回答基于通用知识，非专属知识库内容，仅供参考】
 结尾：【建议你查阅官方文档或联系相关人员获取准确信息】"""
 
-             messages = [HumanMessage(content=disclaimer_prompt)]
+             # Use history for General Knowledge fallback too
+             messages = []
+             if chat_history:
+                 # Add condensed history for context
+                 for msg in chat_history[-4:]:
+                    if msg.get("role") == "user":
+                        messages.append(HumanMessage(content=msg.get("content")))
+                    elif msg.get("role") == "assistant":
+                        messages.append(AIMessage(content=msg.get("content")))
+             
+             messages.append(HumanMessage(content=disclaimer_prompt))
              
              async for chunk in self.llm.astream(messages):
                 if chunk.content:
@@ -241,7 +275,6 @@ class RAGEngine:
         context = "\n\n".join([doc.page_content for doc in docs])
         
         # Manually construct prompt to control streaming
-        from langchain_core.messages import SystemMessage, HumanMessage
         
         system_prompt = "你是一个专业的知识库助手。请根据以下提供的参考文档内容回答用户的问题。如果文档中没有相关信息，请诚实地说明无法回答，不要编造信息。回答要条理清晰，使用 Markdown 格式。"
         if is_web_search:
@@ -250,9 +283,18 @@ class RAGEngine:
         user_prompt = f"参考文档：\n{context}\n\n用户问题：{query}"
         
         messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
+            SystemMessage(content=system_prompt)
         ]
+        
+        # Add history to final generation prompt
+        if chat_history:
+             for msg in chat_history[-4:]: # Keep last 2 turns
+                if msg.get("role") == "user":
+                    messages.append(HumanMessage(content=msg.get("content")))
+                elif msg.get("role") == "assistant":
+                    messages.append(AIMessage(content=msg.get("content")))
+        
+        messages.append(HumanMessage(content=user_prompt))
         
         # Stream from LLM
         print(f"[{time.time()}] Starting LLM generation...")
