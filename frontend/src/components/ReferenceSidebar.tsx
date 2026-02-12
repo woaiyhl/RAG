@@ -9,7 +9,7 @@ interface ReferenceSidebarProps {
   onClose: () => void;
   sources: any[];
   query?: string;
-  onViewDocument?: (fileId: string, textToHighlight?: string) => void;
+  onViewDocument?: (fileId: string, textToHighlight?: string, page?: number) => void;
 }
 
 const HighlightText: React.FC<{ text: string; query?: string }> = ({ text, query }) => {

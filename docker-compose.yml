@@ -1,8 +1,8 @@
-version: '3.8'
+version: "3.8"
 
 services:
   backend:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rag-backend
@@ -16,12 +16,15 @@ services:
     # No ports exposed to host, only internal network for Nginx
 
   frontend:
-    build: 
+    build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: rag-web
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - backend
     restart: always

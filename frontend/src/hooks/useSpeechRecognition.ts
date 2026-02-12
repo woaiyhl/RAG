@@ -79,7 +79,7 @@ export const useSpeechRecognition = ({ onResult, onEnd }: UseSpeechRecognitionPr
 
     if (window.isSecureContext === false) {
       console.error("Speech Recognition requires a secure context (HTTPS)");
-      setError("语音识别需要 HTTPS 安全连接");
+      setError("语音识别需要 HTTPS 安全连接（或 localhost 本地访问）");
       return;
     }
 
