@@ -1,59 +1,37 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Table, Button, Tag, Popconfirm, message, Space, Tooltip } from "antd";
-import {
-  FileTextOutlined,
-  ReloadOutlined,
-  FullscreenOutlined,
-  FullscreenExitOutlined,
-  CloseOutlined,
-} from "@ant-design/icons";
+import { FileTextOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Trash2, Eye } from "lucide-react";
 import type { ColumnsType } from "antd/es/table";
-import { getDocuments, deleteDocument, Document } from "../services/api";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { getDocuments, deleteDocument, Document as DocumentType } from "../services/api";
+import { DocumentPreview, PreviewFile } from "./DocumentPreview";
 
 interface DocumentManagerProps {
   open: boolean;
   onClose: () => void;
   refreshTrigger: number; // 外部触发刷新（例如上传成功后）
-  initialPreview?: { fileId: string; highlight?: string } | null;
 }
 
 export const DocumentManager: React.FC<DocumentManagerProps> = ({
   open,
   onClose,
   refreshTrigger,
-  initialPreview,
 }) => {
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewTitle, setPreviewTitle] = useState("");
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [mdContent, setMdContent] = useState<string | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const [highlightText, setHighlightText] = useState<string | null>(null);
 
-  // Auto-open preview when documents are loaded and initialPreview is present
-  useEffect(() => {
-    if (open && documents.length > 0 && initialPreview) {
-      const doc = documents.find((d) => d.id.toString() === initialPreview.fileId);
-      if (doc) {
-        handlePreview(doc);
-        if (initialPreview.highlight) {
-          setHighlightText(initialPreview.highlight);
-        }
-      }
-    }
-  }, [documents, initialPreview, open]);
+  // Local preview state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
 
   const fetchDocuments = async () => {
     setLoading(true);
     try {
       const data = await getDocuments();
-      setDocuments(data);
+      setDocuments(
+        data.sort((a, b) => new Date(b.upload_time).getTime() - new Date(a.upload_time).getTime()),
+      );
     } catch (error) {
       console.error("Failed to fetch documents:", error);
       message.error("获取文档列表失败");
@@ -82,46 +60,12 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     }
   };
 
-  const handlePreview = async (record: Document) => {
-    console.log("Previewing file:", record.filename);
-    const filename = record.filename.trim().toLowerCase();
-
-    setPreviewTitle(record.filename);
-    setIsFullscreen(false);
-    setMdContent(null);
-    setPreviewUrl(null);
-
-    if (filename.endsWith(".md") || filename.endsWith(".markdown")) {
-      console.log("Detected Markdown file");
-      setLoadingPreview(true);
-      try {
-        const response = await fetch(`/api/v1/documents/${record.id}/preview`);
-        if (!response.ok) throw new Error("Failed to load content");
-        const text = await response.text();
-        console.log("Markdown content loaded, length:", text.length);
-        setMdContent(text);
-      } catch (error) {
-        console.error("Failed to load markdown content:", error);
-        message.error("无法加载 Markdown 内容");
-      } finally {
-        setLoadingPreview(false);
-      }
-    } else {
-      console.log("Not a Markdown file, using iframe preview");
-      setPreviewUrl(`/api/v1/documents/${record.id}/preview`);
-    }
-  };
-
-  const closePreview = () => {
-    setPreviewUrl(null);
-    setMdContent(null);
-    setLoadingPreview(false);
-    setPreviewTitle("");
-    setIsFullscreen(false);
-  };
-
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
+  const handlePreview = (record: DocumentType) => {
+    setPreviewFile({
+      fileId: record.id.toString(),
+      filename: record.filename,
+    });
+    setIsPreviewOpen(true);
   };
 
   const formatSize = (bytes: number) => {
@@ -132,7 +76,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
-  const columns: ColumnsType<Document> = [
+  const columns: ColumnsType<DocumentType> = [
     {
       title: "文件名",
       dataIndex: "filename",
@@ -261,102 +205,11 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
         />
       </Modal>
 
-      <Modal
-        open={!!previewUrl || !!mdContent || loadingPreview}
-        closable={false}
-        title={
-          <div className="flex items-center justify-between py-1">
-            <span
-              className="text-base font-medium text-gray-700 truncate max-w-2xl"
-              title={previewTitle}
-            >
-              {previewTitle}
-            </span>
-            <div className="flex items-center gap-1">
-              <Tooltip title={isFullscreen ? "退出全屏" : "全屏"}>
-                <button
-                  onClick={toggleFullscreen}
-                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex items-center justify-center"
-                >
-                  {isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-                </button>
-              </Tooltip>
-              <div className="w-px h-4 bg-gray-200 mx-1"></div>
-              <Tooltip title="关闭">
-                <button
-                  onClick={closePreview}
-                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors flex items-center justify-center"
-                >
-                  <CloseOutlined />
-                </button>
-              </Tooltip>
-            </div>
-          </div>
-        }
-        onCancel={closePreview}
-        footer={null}
-        width={isFullscreen ? "100%" : 1000}
-        style={
-          isFullscreen ? { top: 0, padding: 0, maxWidth: "100vw", height: "100vh" } : undefined
-        }
-        styles={{ body: { height: isFullscreen ? "calc(100vh - 55px)" : "80vh", padding: 0 } }}
-        destroyOnHidden
-        centered={!isFullscreen}
-        zIndex={1001} // Ensure it's above the document manager modal
-      >
-        {loadingPreview ? (
-          <div className="flex justify-center items-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
-        ) : mdContent ? (
-          <div className="p-8 overflow-y-auto h-full bg-white">
-            <article className="prose prose-slate max-w-none">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  p: ({ children }) => {
-                    // Simple highlighter for paragraph text
-                    // This is naive but works for exact matches of chunks
-                    if (
-                      highlightText &&
-                      typeof children === "string" &&
-                      children.includes(highlightText)
-                    ) {
-                      // Split and highlight
-                      const parts = children.split(highlightText);
-                      return (
-                        <p>
-                          {parts.map((part, i) => (
-                            <React.Fragment key={i}>
-                              {part}
-                              {i < parts.length - 1 && (
-                                <mark className="bg-yellow-200 text-gray-900 rounded-sm px-0.5">
-                                  {highlightText}
-                                </mark>
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </p>
-                      );
-                    }
-                    return <p>{children}</p>;
-                  },
-                }}
-              >
-                {mdContent}
-              </ReactMarkdown>
-            </article>
-          </div>
-        ) : (
-          previewUrl && (
-            <iframe
-              src={previewUrl}
-              className="w-full h-full border-0 rounded-b-lg"
-              title="Document Preview"
-            />
-          )
-        )}
-      </Modal>
+      <DocumentPreview
+        open={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        previewFile={previewFile}
+      />
     </>
   );
 };

@@ -9,7 +9,12 @@ interface ReferenceSidebarProps {
   onClose: () => void;
   sources: any[];
   query?: string;
-  onViewDocument?: (fileId: string, textToHighlight?: string, page?: number) => void;
+  onViewDocument?: (file: {
+    fileId: string;
+    filename: string;
+    highlight?: string;
+    page?: number;
+  }) => void;
 }
 
 const HighlightText: React.FC<{ text: string; query?: string }> = ({ text, query }) => {
@@ -69,6 +74,7 @@ interface ParsedSource {
   content: string;
   relevanceScore?: number;
   fileId?: string;
+  page?: number;
 }
 
 const parseSource = (source: any): ParsedSource => {
@@ -79,6 +85,7 @@ const parseSource = (source: any): ParsedSource => {
       url: source.url,
       content: source.content || "",
       fileId: source.metadata?.file_id,
+      page: source.metadata?.page !== undefined ? Number(source.metadata.page) + 1 : undefined,
     };
   }
 
@@ -331,7 +338,12 @@ export const ReferenceSidebar: React.FC<ReferenceSidebarProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 if (onViewDocument && source.fileId) {
-                  onViewDocument(source.fileId, source.content);
+                  onViewDocument({
+                    fileId: source.fileId,
+                    filename: source.title,
+                    highlight: source.content,
+                    page: source.page,
+                  });
                 }
               }}
               className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium group-hover:underline"

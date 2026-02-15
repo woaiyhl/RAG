@@ -7,6 +7,7 @@ import {
   deleteMessage,
 } from "./services/api";
 import { DocumentManager } from "./components/DocumentManager";
+import { DocumentPreview, PreviewFile } from "./components/DocumentPreview";
 import { Sidebar } from "./components/Sidebar";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -65,11 +66,12 @@ function App() {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
   const [refreshDocsTrigger, setRefreshDocsTrigger] = useState(0);
   const [isDocManagerOpen, setIsDocManagerOpen] = useState(false);
-  const [docPreview, setDocPreview] = useState<{ fileId: string; highlight?: string } | null>(null);
+  const [isDocPreviewOpen, setIsDocPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
 
-  const handleViewDocument = (fileId: string, textToHighlight?: string) => {
-    setDocPreview({ fileId, highlight: textToHighlight });
-    setIsDocManagerOpen(true);
+  const handleViewDocument = (file: PreviewFile) => {
+    setPreviewFile(file);
+    setIsDocPreviewOpen(true);
   };
   // currentConversationId replaced by activeId from store
   const [refreshSidebarTrigger, setRefreshSidebarTrigger] = useState(0);
@@ -486,8 +488,8 @@ function App() {
                           uploadStatus === "error"
                             ? "border-red-500/50 bg-red-500/10"
                             : uploadStatus === "success"
-                            ? "border-green-500/50 bg-green-500/10"
-                            : "border-gray-700 hover:border-primary-500 hover:bg-gray-800/50"
+                              ? "border-green-500/50 bg-green-500/10"
+                              : "border-gray-700 hover:border-primary-500 hover:bg-gray-800/50"
                         }
                       `}
                         >
@@ -506,10 +508,10 @@ function App() {
                               {isUploading
                                 ? "正在解析..."
                                 : uploadStatus === "success"
-                                ? "上传成功"
-                                : uploadStatus === "error"
-                                ? "上传失败"
-                                : "上传文档 (PDF/TXT/MD)"}
+                                  ? "上传成功"
+                                  : uploadStatus === "error"
+                                    ? "上传失败"
+                                    : "上传文档 (PDF/TXT/MD)"}
                             </span>
                           </div>
                           <input
@@ -548,10 +550,14 @@ function App() {
           open={isDocManagerOpen}
           onClose={() => {
             setIsDocManagerOpen(false);
-            setDocPreview(null);
           }}
           refreshTrigger={refreshDocsTrigger}
-          initialPreview={docPreview}
+        />
+
+        <DocumentPreview
+          open={isDocPreviewOpen}
+          onClose={() => setIsDocPreviewOpen(false)}
+          previewFile={previewFile}
         />
 
         <ReferenceSidebar
