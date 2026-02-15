@@ -345,15 +345,23 @@ function App() {
         targetConversationId,
         userMessage,
         (data) => {
+          if (data.status) {
+            updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
+              ...msg,
+              status: data.status,
+            }));
+          }
           if (data.error) {
             updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
               ...msg,
+              status: undefined,
               content: msg.content + `\n\n❌ 错误: ${data.error}`,
             }));
           }
           if (data.answer) {
             updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
               ...msg,
+              status: undefined,
               content: msg.content + data.answer,
             }));
           }
@@ -637,18 +645,27 @@ function App() {
                     >
                       {msg.role === "assistant" && !msg.content ? (
                         <div className="flex items-center gap-2 h-5">
-                          <div
-                            className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "0ms" }}
-                          />
-                          <div
-                            className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "150ms" }}
-                          />
-                          <div
-                            className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "300ms" }}
-                          />
+                          {msg.status ? (
+                            <span className="text-gray-400 text-xs flex items-center gap-2">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              {msg.status}
+                            </span>
+                          ) : (
+                            <>
+                              <div
+                                className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
+                                style={{ animationDelay: "0ms" }}
+                              />
+                              <div
+                                className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
+                                style={{ animationDelay: "150ms" }}
+                              />
+                              <div
+                                className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce"
+                                style={{ animationDelay: "300ms" }}
+                              />
+                            </>
+                          )}
                         </div>
                       ) : (
                         <ReactMarkdown

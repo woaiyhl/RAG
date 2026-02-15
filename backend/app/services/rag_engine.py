@@ -237,6 +237,7 @@ class RAGEngine:
         # 1. Query Rewriting (if history exists)
         search_query = query
         if chat_history:
+            yield {"status": "正在理解上下文..."}
             print(f"[{time.time()}] rewriting query based on history...")
             rewrite_prompt = "请根据以下对话历史，将用户的最新问题改写为一个独立的、语义完整的搜索查询。不要回答问题，只需输出改写后的查询。如果无需改写，直接输出原问题。\n\n对话历史：\n"
             for msg in chat_history[-6:]:  # Limit history context
@@ -262,6 +263,7 @@ class RAGEngine:
         )
 
         try:
+            yield {"status": "正在检索相关文档..."}
             print(f"[{time.time()}] Starting retrieval for '{search_query}'...")
             docs = await retriever.aget_relevant_documents(search_query)
             print(
@@ -270,6 +272,7 @@ class RAGEngine:
 
             # RERANK STEP
             if docs:
+                yield {"status": "正在筛选最佳结果..."}
                 print(f"[{time.time()}] Reranking {len(docs)} documents...")
                 docs = self.rerank_service.rerank(search_query, docs, top_k=4)
                 print(f"[{time.time()}] Reranking complete. Kept {len(docs)} docs.")
@@ -288,9 +291,7 @@ class RAGEngine:
             try:
                 from app.services.web_search import WebSearchService
 
-                yield {
-                    "answer": "（未在知识库中找到相关内容，正在联网搜索最新信息...）\n\n"
-                }
+                yield {"status": "正在联网搜索最新信息..."}
                 docs = await WebSearchService.asearch(search_query)
                 if docs:
                     is_web_search = True
@@ -351,6 +352,7 @@ class RAGEngine:
         messages.append(HumanMessage(content=user_prompt))
 
         # Stream from LLM
+        yield {"status": "正在生成回答..."}
         print(f"[{time.time()}] Starting LLM generation...")
         llm_start_time = time.time()
         first_token_received = False
