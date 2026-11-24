@@ -6,6 +6,7 @@ from langchain.retrievers.ensemble import EnsembleRetriever
 from app.core.config import settings
 from typing import List
 from langchain_core.documents import Document
+from urllib.parse import urlsplit
 import jieba
 
 # Global cache for BM25 retriever to avoid rebuilding it on every request
@@ -26,6 +27,10 @@ class VectorStoreService:
                 model=settings.EMBEDDING_MODEL_NAME,
                 openai_api_key=settings.OPENAI_API_KEY,
                 openai_api_base=settings.OPENAI_API_BASE,
+                # 硅基流动接收原文本，不接收 OpenAI 分词后的 token 数组。
+                check_embedding_ctx_length=urlsplit(settings.OPENAI_API_BASE).hostname not in {
+                    "api.siliconflow.cn", "api-st.siliconflow.cn"
+                },
                 timeout=60
             )
         self.vector_db = Chroma(

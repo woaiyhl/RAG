@@ -11,6 +11,7 @@ import { DocumentPreview, PreviewFile } from "./components/DocumentPreview";
 import { Sidebar } from "./components/Sidebar";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { unwrapAssistantMarkdown } from "./utils/markdown";
 import {
   Send,
   Upload,
@@ -111,7 +112,7 @@ function App() {
             id: msg.id.toString(),
             uid: msg.id.toString(), // Use DB ID as UID for historical messages
             role: msg.role,
-            content: msg.content,
+            content: msg.content || (msg.role === "assistant" ? "上次请求未返回回答，请重新生成。" : ""),
             sources: msg.sources ? JSON.parse(msg.sources) : undefined,
           }));
           setStoreMessages(activeId, formattedMessages);
@@ -388,16 +389,26 @@ function App() {
         },
         (error) => {
           if (error.name === "AbortError") {
-            console.log("Request aborted");
+            updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
+              ...msg,
+              status: undefined,
+              content: msg.content || "已停止生成。",
+            }));
             return;
           }
           console.error(error);
           updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
             ...msg,
+            status: undefined,
             content: msg.content + "\n\n❌ 发生错误，请重试。",
           }));
         },
         () => {
+          updateMessage(targetConversationId!, currentAssistantId, (msg) => ({
+            ...msg,
+            status: undefined,
+            content: msg.content || "本次请求未返回回答，请重新生成。",
+          }));
           setStoreLoading(targetConversationId!, false);
           setAbortController(targetConversationId!, null);
           setRefreshSidebarTrigger((prev) => prev + 1);
@@ -643,7 +654,7 @@ function App() {
                     }
                   `}
                     >
-                      {msg.role === "assistant" && !msg.content ? (
+                      {msg.role === "assistant" && !msg.content && isLoading && msg.uid === messages[messages.length - 1]?.uid ? (
                         <div className="flex items-center gap-2 h-5">
                           {msg.status ? (
                             <span className="text-gray-400 text-xs flex items-center gap-2">
@@ -674,7 +685,7 @@ function App() {
                           }`}
                           remarkPlugins={[remarkGfm]}
                         >
-                          {msg.content}
+                          {(msg.role === "assistant" ? unwrapAssistantMarkdown(msg.content) : msg.content) || "本次请求未返回回答，请重新生成。"}
                         </ReactMarkdown>
                       )}
                     </div>
@@ -694,18 +705,19 @@ function App() {
 
                     {msg.role === "assistant" &&
                       !isLoading &&
-                      msg.content &&
                       !msg.content.includes("### 文档解析成功") && (
                         <div className="flex items-center gap-4 mt-2 ml-1">
-                          <Tooltip title="复制内容">
-                            <button
-                              onClick={() => handleCopy(msg.content)}
-                              className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
-                            >
-                              <Copy className="w-4 h-4" />
-                              <span className="text-xs">复制</span>
-                            </button>
-                          </Tooltip>
+                          {msg.content && (
+                            <Tooltip title="复制内容">
+                              <button
+                                onClick={() => handleCopy(msg.content)}
+                                className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                              >
+                                <Copy className="w-4 h-4" />
+                                <span className="text-xs">复制</span>
+                              </button>
+                            </Tooltip>
+                          )}
                           <Tooltip title="重新生成">
                             <button
                               onClick={() => handleRegenerate(msg.id)}

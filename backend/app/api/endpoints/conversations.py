@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 conversation_service = ConversationService()
 
+def format_chat_error(error: str) -> str:
+    if "billing_not_active" in error:
+        return "当前 OpenAI 账户尚未激活 API 计费，无法生成回答。请检查 OpenAI 平台的计费设置后重新生成。"
+    return error
+
 class ChatRequest(BaseModel):
     query: str
 
@@ -95,7 +100,9 @@ async def chat_stream(
     # We can just iterate and exclude the current one by ID, or just take all except the last one.
     # Assuming get_messages returns ordered list.
     for msg in db_messages:
-        if msg.id != user_msg_id:
+        if msg.id != user_msg_id and msg.content and not (
+            msg.role == "assistant" and msg.content.startswith("❌ 错误：")
+        ):
             chat_history.append({"role": msg.role, "content": msg.content})
 
     # 4. Stream Response
@@ -105,47 +112,53 @@ async def chat_stream(
         full_answer = ""
         sources = []
         is_saved = False
-        
-        try:
-            async for chunk in rag_engine.astream_answer_generator(request.query, chat_history=chat_history):
-                # Accumulate answer
-                if "answer" in chunk:
-                    full_answer += chunk["answer"]
-                if "sources" in chunk:
-                    sources = chunk["sources"]
-                
-                yield f"data: {json.dumps(chunk)}\n\n"
-            
-            # 4. Save Assistant Message after stream completes
+
+        def append_error(error: str) -> str:
+            nonlocal full_answer
+            error = format_chat_error(error)
+            full_answer += ("\n\n" if full_answer else "") + f"❌ 错误：{error}"
+            return error
+
+        def save_answer():
+            nonlocal is_saved
             with SessionLocal() as session:
-                service = ConversationService()
                 assistant_msg = MessageCreate(
-                    role="assistant", 
+                    role="assistant",
                     content=full_answer,
-                    sources=json.dumps(sources) if sources else None
+                    sources=json.dumps(sources) if sources else None,
                 )
-                saved_msg = service.add_message(session, conversation_id, assistant_msg)
+                saved_msg = conversation_service.add_message(session, conversation_id, assistant_msg)
                 is_saved = True
-                
-                # Send final IDs
-                yield f"data: {json.dumps({'message_id': saved_msg.id, 'user_message_id': user_msg_id})}\n\n"
-                
-        except Exception as e:
-            logger.error(f"Error in chat stream: {str(e)}", exc_info=True)
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                return {"message_id": saved_msg.id, "user_message_id": user_msg_id}
+
+        try:
+            try:
+                async for chunk in rag_engine.astream_answer_generator(request.query, chat_history=chat_history):
+                    if chunk.get("error"):
+                        error = append_error(str(chunk["error"]))
+                        yield f"data: {json.dumps({'error': error})}\n\n"
+                        break
+                    if "answer" in chunk:
+                        full_answer += chunk["answer"]
+                    if "sources" in chunk:
+                        sources = chunk["sources"]
+                    yield f"data: {json.dumps(chunk)}\n\n"
+
+                if not full_answer.strip():
+                    error = append_error("本次请求未返回回答，请重新生成。")
+                    yield f"data: {json.dumps({'error': error})}\n\n"
+            except Exception as e:
+                logger.error(f"Error in chat stream: {str(e)}", exc_info=True)
+                error = append_error(str(e))
+                yield f"data: {json.dumps({'error': error})}\n\n"
+
+            yield f"data: {json.dumps(save_answer())}\n\n"
         finally:
             # If not saved (e.g. aborted or error) and we have some content, save it
             if not is_saved and full_answer:
                 try:
                     logger.info("Saving partial message due to stream interruption")
-                    with SessionLocal() as session:
-                        service = ConversationService()
-                        assistant_msg = MessageCreate(
-                            role="assistant", 
-                            content=full_answer,
-                            sources=json.dumps(sources) if sources else None
-                        )
-                        service.add_message(session, conversation_id, assistant_msg)
+                    save_answer()
                 except Exception as save_error:
                     logger.error(f"Failed to save partial message: {str(save_error)}")
 

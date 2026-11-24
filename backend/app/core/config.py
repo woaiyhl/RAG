@@ -13,6 +13,10 @@ class Settings:
     
     # LLM Configuration
     LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "gpt-3.5-turbo")
+    _llm_enable_thinking = os.getenv("LLM_ENABLE_THINKING")
+    LLM_ENABLE_THINKING = (
+        _llm_enable_thinking.lower() == "true" if _llm_enable_thinking is not None else None
+    )
     
     # Mock Configuration
     USE_MOCK_RAG = os.getenv("USE_MOCK_RAG", "false").lower() == "true"

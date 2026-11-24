@@ -27,6 +27,10 @@ class RAGEngine:
                 temperature=0,
                 openai_api_key=settings.OPENAI_API_KEY,
                 openai_api_base=settings.OPENAI_API_BASE,
+                extra_body=(
+                    {"enable_thinking": settings.LLM_ENABLE_THINKING}
+                    if settings.LLM_ENABLE_THINKING is not None else None
+                ),
                 timeout=60,
             )
 
